@@ -94,5 +94,12 @@
     "socials": {
       "website": "https://mouvlatam.com"
     }
-  }
+  },
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/introduction",
+      "permanent": true
+    }
+  ]
 }
