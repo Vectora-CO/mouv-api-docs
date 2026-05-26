@@ -1,0 +1,73 @@
+---
+title: Autenticación
+description: Cómo autenticar requests con API key Bearer
+---
+
+## API key
+
+Toda llamada a la API requiere un header `Authorization: Bearer <API_KEY>` donde `<API_KEY>` es la llave plana que se entregó **una sola vez** al crearla.
+
+```http
+Authorization: Bearer mvk_a1b2c3d4e5f6g7h8...
+```
+
+Las llaves comienzan con el prefijo **`mvk_`** seguido de ~96 bits de entropía (32 caracteres base64url). Cada llave es bound a UNA cuenta empresarial y NO es transferible.
+
+## Generar una llave
+
+1. Iniciá sesión en [consola.mouvlatam.com](https://consola.mouvlatam.com)
+2. Navegá a **API keys** en el menú lateral
+3. Click **Generar nueva llave**
+4. Ingresá un **label** descriptivo (ej. `production-server`, `staging`, `reporting-readonly`)
+5. Elegí el **scope**: `READ` (solo lectura) o `WRITE` (lectura + operaciones financieras)
+6. La llave plana se muestra **una sola vez**. Copiala y guardala en tu secret manager — Mouv solo almacena un hash bcrypt, no podemos recuperarla
+
+<Warning>
+**Si perdés una llave, generá una nueva**. Mouv NO puede mostrarte llaves existentes — solo el hash queda almacenado.
+</Warning>
+
+## Almacenamiento seguro
+
+<CardGroup cols={2}>
+  <Card title="✅ Recomendado">
+    AWS Secrets Manager · HashiCorp Vault · GCP Secret Manager · environment variables en deploy pipelines
+  </Card>
+  <Card title="❌ Evitá">
+    Repos públicos · Slack messages · `.env` committeado · Frontend bundles · Logs sin redacción
+  </Card>
+</CardGroup>
+
+## Rotación
+
+Recomendamos rotar API keys cada **90 días** como mínimo:
+
+1. Generá una nueva llave con el mismo scope
+2. Actualizá tu sistema a la nueva llave
+3. Verificá que las requests funcionan
+4. Revocá la llave vieja desde el dashboard
+
+Mientras la llave vieja no esté revocada, ambas funcionan en paralelo — usá esto para zero-downtime rotation.
+
+## Revocación
+
+Click en **Revocar** sobre cualquier llave en el dashboard. La revocación es **instantánea** (cero cache de auth, DB read cada request). Una llave revocada retorna `401 INVALID_API_KEY`.
+
+## Auditoría
+
+Cada llave tiene:
+- `lastUsedAt` — actualizado async en cada request exitoso
+- `createdAt` / `createdByUserId` — quién la generó
+- `revokedAt` / `revokedByUserId` — quién la revocó (si aplica)
+- Audit trail por transacción: el `apiKeyId` queda persistido en cada `Transaction` que la llave originó
+
+## Modelo multi-tenant
+
+<Note>
+Tu llave **solo puede acceder a datos de tu cuenta**. Mouv NO tiene endpoints cliente que retornen datos cross-company, y la API key NO puede ser usada para administrar otras cuentas.
+</Note>
+
+Las APIs siguen el patrón Stripe restricted keys:
+- Cada llave tiene un `companyId` baked-in (no transferible)
+- Todos los queries downstream filtran por `companyId` automáticamente
+- API keys NO pueden crear otras API keys (anti-privilege-escalation)
+- Si tu cuenta es suspendida, la llave retorna `401 COMPANY_INACTIVE` aunque sea válida técnicamente

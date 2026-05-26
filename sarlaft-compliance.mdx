@@ -1,0 +1,110 @@
+---
+title: SARLAFT y compliance
+description: Obligaciones regulatorias colombianas — qué Mouv hace + qué necesita tu integración
+---
+
+Mouv Platform es una fintech regulada por la **Superintendencia Financiera de Colombia**. Toda operación está sujeta a SARLAFT (Sistema de Administración del Riesgo de Lavado de Activos y Financiación del Terrorismo).
+
+## Qué Mouv hace por vos automáticamente
+
+<CardGroup cols={2}>
+  <Card title="Blacklist AML" icon="shield">
+    Cada operación verifica al destinatario contra lista oficial UIAF + listas internas Mouv. Bloqueo automático con código `RECIPIENT_BLACKLISTED`.
+  </Card>
+  <Card title="Counterparty limits" icon="chart-line">
+    Topes diarios y mensuales por tercero. Configurables por empresa. Bloqueo con código `COUNTERPARTY_*_LIMIT_EXCEEDED`.
+  </Card>
+  <Card title="Audit trail" icon="clipboard-list">
+    Cada operación queda inmutablemente registrada con `apiKeyId`, IP origen, timestamp, monto, destinatario, documento. Reportable a UIAF.
+  </Card>
+  <Card title="Onboarding KYC/KYB" icon="user-check">
+    Tu empresa pasó por KYB antes de tener acceso a la API. Re-verificaciones periódicas según riesgo.
+  </Card>
+</CardGroup>
+
+## Qué tu integración DEBE hacer
+
+### Persistir el `targetDocument`
+
+Para retiros BREB, **`targetDocument` es obligatorio** (compliance SARLAFT). Lo obtenés del response de `/transfers/resolve-key`:
+
+```javascript
+const resolved = await fetch('/transfers/resolve-key', ...).then(r => r.json());
+
+await fetch('/transfers/send', {
+  method: 'POST',
+  body: JSON.stringify({
+    amount,
+    destination: { brebKey: { type: resolved.keyType, value: keyValue } },
+    targetName: resolved.recipient.fullName,
+    targetDocument: resolved.recipient.idValue, // ← OBLIGATORIO
+  }),
+});
+```
+
+Si omitís `targetDocument`, Mouv rechaza con `422 TARGET_DOCUMENT_REQUIRED` ANTES de mover fondos.
+
+Para retiros ACH, el documento del titular va dentro de `destination.bankAccount.documentNumber` (mismo rol compliance).
+
+### Validar identidad del pagador (PSE)
+
+Al crear un deposit PSE, los campos `payerDocumentTypeId` + `payerDocumentNumber` + `payerFirstName` + `payerLastName` son obligatorios. Mouv los valida contra blacklist UIAF antes de generar el link.
+
+### NO compartir API keys
+
+Cada llave es atribución de auditoría: una llave revocada-tras-compromiso requiere reportar incident a Superintendencia + emitir SAR (Suspicious Activity Report) si hubo movimiento sospechoso. Llaves compartidas hacen forensics imposible.
+
+### Mantener logs de tu lado
+
+Aunque Mouv tiene audit trail completo, **mantené tu propio log** de:
+- Quién llamó cada API request (usuario interno, sistema)
+- Quién aprobó cada operación financiera (si aplica multi-sig en tu sistema)
+- Reason codes para refunds / cancelaciones
+
+Esto es estándar industria para fintechs reguladas. SARLAFT puede pedirlo en auditoría.
+
+## Reportes a UIAF
+
+Mouv emite reportes automáticos a UIAF cuando se cumplen umbrales:
+- Operación individual >$10.000 USD equivalente
+- Cliente con operaciones acumuladas sospechosas según patrones
+- Operaciones rechazadas por blacklist
+
+Tu empresa también puede tener obligaciones de reporte directo según tu actividad. Consultá con tu oficial de cumplimiento.
+
+## Caps por transferencia
+
+| Rail | Cap individual | Razón |
+|---|---|---|
+| **BREB** | $12.000.000 COP | Cap Banco República sistema Bre-B |
+| **ACH** | $2.000.000.000 COP | Cap interno Mouv (banking standard) |
+
+Para montos mayores: dividí en múltiples transferencias o contactá soporte para configuración special.
+
+## Caps por contraparte (counterparty limits)
+
+Configurables por tu empresa desde el dashboard (`/configuracion/aml`). Default:
+- **Diario**: $50.000.000 COP por tercero (suma cross-rail)
+- **Mensual**: $500.000.000 COP por tercero
+
+Si tu operativa requiere caps más altos, contactanos con justificación + documentación KYC del tercero.
+
+## Régimen tributario IVA
+
+Las comisiones de Mouv tienen IVA 19% para empresas en **régimen común** colombiano. Mouv detecta automáticamente tu régimen desde tu información KYB y aplica IVA solo cuando corresponde. El campo `ivaApplicable` en cada quote te dice si tu empresa está sujeta.
+
+Si pensás que el flag está mal configurado, contactanos.
+
+## Sospecha de fraude
+
+Si detectás actividad sospechosa (uso de tu API key fuera de tus sistemas, montos no autorizados):
+
+1. **Revocá la llave inmediatamente** desde el dashboard
+2. **Notificanos** a `hola@vectora.com.co` con timestamp + transacciones sospechosas
+3. Mouv asistirá con la documentación SAR si aplica
+
+## Documentación oficial
+
+- [Superintendencia Financiera de Colombia — SARLAFT](https://www.superfinanciera.gov.co/)
+- [UIAF — Unidad de Información y Análisis Financiero](https://www.uiaf.gov.co/)
+- [Ley 526 de 1999 + Decreto 663 de 1993](https://www.suin-juriscol.gov.co/)

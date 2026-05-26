@@ -1,0 +1,110 @@
+---
+title: GET /wallets/transactions
+description: Listado unificado de entradas + salidas
+api: 'GET https://consola.mouvlatam.com/api/wallets/transactions'
+---
+
+Listado UNIFICADO de movimientos: tanto retiros (`TRANSFER_OUT`) como entradas (`TRANSFER_IN` — PSE deposits, BREB inbounds, manual credits). Industry pattern Stripe `/v1/balance_transactions`.
+
+**Scope**: `READ`
+
+## Query params
+
+| Param | Tipo | Default | Significado |
+|---|---|---|---|
+| `page` | number | 0 | Zero-indexed |
+| `limit` | number | 20 | Max 100 |
+| `type` | string | (all) | `TRANSFER_OUT` / `TRANSFER_IN` / `FEE_CHARGE` / `BALANCE_ADD` |
+| `rail` | string | (all) | `BREB` o `ACH` |
+| `from` | string | (none) | ISO 8601 date (ej. `2026-05-01`) |
+| `to` | string | (none) | ISO 8601 date (ej. `2026-05-31`) |
+
+## Response 200
+
+<ResponseField name="items" type="array">
+  <Expandable title="Schema de movement">
+    <ResponseField name="id" type="string">UUID</ResponseField>
+    <ResponseField name="type" type="string">`TRANSFER_OUT`, `TRANSFER_IN`, `FEE_CHARGE`, `BALANCE_ADD`</ResponseField>
+    <ResponseField name="rail" type="string">`BREB`, `ACH`, o `PSE` (inflow)</ResponseField>
+    <ResponseField name="status" type="string">`PENDING` / `COMPLETED` / `FAILED`</ResponseField>
+    <ResponseField name="amount" type="string">BigInt-safe (centavos)</ResponseField>
+    <ResponseField name="totalFee" type="string">Comisión</ResponseField>
+    <ResponseField name="ivaAmount" type="string">IVA</ResponseField>
+    <ResponseField name="netAmount" type="string">`amount - totalFee` (outflow) o `amount + totalFee` recibido (inflow)</ResponseField>
+    <ResponseField name="targetName" type="string | null">Para outflows: destinatario</ResponseField>
+    <ResponseField name="targetDocument" type="string | null">Para outflows: documento destinatario</ResponseField>
+    <ResponseField name="reference" type="string | null">Tu reference (si lo proveíste)</ResponseField>
+    <ResponseField name="createdAt" type="string">ISO 8601</ResponseField>
+    <ResponseField name="completedAt" type="string | null">Cuándo confirmó el rail</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="nextCursor" type="string | null">Cursor next page o null</ResponseField>
+<ResponseField name="hasMore" type="boolean">Conveniencia — `nextCursor !== null`</ResponseField>
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+# Solo retiros BREB del mes de mayo
+curl "https://consola.mouvlatam.com/api/wallets/transactions?type=TRANSFER_OUT&rail=BREB&from=2026-05-01&to=2026-05-31&limit=100" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+```javascript Node.js
+// Reporting diario — todos los movimientos de ayer
+async function dailyReport() {
+  const yesterday = new Date(Date.now() - 86400000);
+  const date = yesterday.toISOString().split('T')[0];
+  return fetch(
+    `https://consola.mouvlatam.com/api/wallets/transactions?from=${date}&to=${date}&limit=100`,
+    { headers: { 'Authorization': `Bearer ${process.env.MOUV_API_KEY}` } }
+  ).then(r => r.json());
+}
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "items": [
+    {
+      "id": "8e39f393-...",
+      "type": "TRANSFER_OUT",
+      "rail": "BREB",
+      "status": "COMPLETED",
+      "amount": "100000",
+      "totalFee": "1100",
+      "ivaAmount": "209",
+      "netAmount": "98691",
+      "targetName": "JUAN PEREZ",
+      "targetDocument": "1018485810",
+      "reference": "factura-001",
+      "createdAt": "2026-05-25T20:00:00.000Z",
+      "completedAt": "2026-05-25T20:00:05.000Z"
+    },
+    {
+      "id": "9f50e404-...",
+      "type": "TRANSFER_IN",
+      "rail": "PSE",
+      "status": "COMPLETED",
+      "amount": "50000",
+      "totalFee": "550",
+      "ivaAmount": "104",
+      "netAmount": "49346",
+      "targetName": "MARIA RODRIGUEZ",
+      "targetDocument": "1015223344",
+      "reference": null,
+      "createdAt": "2026-05-25T19:30:00.000Z",
+      "completedAt": "2026-05-25T19:30:08.000Z"
+    }
+  ],
+  "nextCursor": null,
+  "hasMore": false
+}
+```
+
+</ResponseExample>

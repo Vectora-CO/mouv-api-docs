@@ -1,0 +1,77 @@
+---
+title: POST /deposits/:id/share-email
+description: Enviar link PSE al pagador por email
+api: 'POST https://consola.mouvlatam.com/api/deposits/:id/share-email'
+---
+
+Envía el link PSE de un deposit al email del pagador. Mouv usa AWS SES — el email viene de `pagos@mouvlatam.com` con tu logo + el `paygatewayUrl`.
+
+**Scope**: `WRITE`
+
+## URL params
+
+<ParamField path="id" type="string" required>
+  ID del deposit (`dep_...`) generado previamente por `POST /deposits/pse`.
+</ParamField>
+
+## Body
+
+<ParamField body="recipientEmail" type="string" required>
+  Email del destinatario (puede ser distinto al `payerEmail` que pusiste al crear el deposit).
+</ParamField>
+
+<ParamField body="recipientName" type="string">
+  Opcional. Si lo proveés, el email lo saluda por nombre.
+</ParamField>
+
+<ParamField body="customMessage" type="string">
+  Opcional. Texto extra (max 500 chars) que se incluye en el cuerpo del email.
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "success": true,
+  "messageId": "ses-msg-id-..."
+}
+```
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/deposits/dep_.../share-email \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipientEmail": "juan@example.com",
+    "recipientName": "Juan Pérez",
+    "customMessage": "Pago de factura #001 — vence 2026-06-01"
+  }'
+```
+
+```javascript Node.js
+async function sharePseByEmail(depositId, email, name) {
+  return fetch(`https://consola.mouvlatam.com/api/deposits/${depositId}/share-email`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      recipientEmail: email,
+      recipientName: name,
+    }),
+  }).then(r => r.json());
+}
+```
+
+</RequestExample>
+
+## Notas
+
+- Mouv NO permite enviar emails con plantilla custom desde tu cuenta — el shape del email es estándar Mouv
+- Para customización (sender domain, branding), contactanos
+- AWS SES production mode activado para Mouv — sin sandbox restrictions

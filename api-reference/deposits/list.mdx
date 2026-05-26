@@ -1,0 +1,95 @@
+---
+title: GET /deposits
+description: Listar tus recaudos PSE
+api: 'GET https://consola.mouvlatam.com/api/deposits'
+---
+
+Lista tus recaudos PSE con paginación cursor-based. **Scope**: `READ`.
+
+## Query params
+
+| Param | Tipo | Default | Significado |
+|---|---|---|---|
+| `status` | string | (all) | Filtra por status: `PENDING_CONFIRM`, `PAID`, `FAILED`, `EXPIRED` |
+| `cursor` | string | (none) | Cursor de paginación (del response anterior) |
+| `limit` | number | 20 | Máximo 100 |
+
+## Response 200
+
+<ResponseField name="items" type="array">
+  <Expandable title="Schema de deposit">
+    <ResponseField name="id" type="string">`dep_...`</ResponseField>
+    <ResponseField name="status" type="string">`PENDING_CONFIRM` / `PAID` / `FAILED` / `EXPIRED`</ResponseField>
+    <ResponseField name="amountCents" type="number">Monto bruto cotizado</ResponseField>
+    <ResponseField name="feeAmountCents" type="number">Comisión cobrada (solo si `PAID`)</ResponseField>
+    <ResponseField name="ivaAmountCents" type="number">IVA cobrado (solo si `PAID`)</ResponseField>
+    <ResponseField name="netCreditedCents" type="number">Lo que se acreditó a tu wallet (solo si `PAID`)</ResponseField>
+    <ResponseField name="payerFirstName" type="string">Pagador</ResponseField>
+    <ResponseField name="payerLastName" type="string">Pagador</ResponseField>
+    <ResponseField name="payerDocument" type="string">Documento pagador</ResponseField>
+    <ResponseField name="payerEmail" type="string">Email pagador</ResponseField>
+    <ResponseField name="internalRef" type="string | null">Tu reference (si lo proveíste)</ResponseField>
+    <ResponseField name="paidAt" type="string | null">Cuándo se confirmó el pago</ResponseField>
+    <ResponseField name="createdAt" type="string">Cuándo se generó el link</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="nextCursor" type="string | null">
+  Si hay más resultados, cursor para la siguiente página. `null` cuando no hay más.
+</ResponseField>
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+# Listar solo deposits PAID
+curl "https://consola.mouvlatam.com/api/deposits?status=PAID&limit=50" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+```javascript Node.js
+// Paginar todos los PAID
+async function listAllPaidDeposits() {
+  let cursor = null;
+  const all = [];
+  do {
+    const url = `https://consola.mouvlatam.com/api/deposits?status=PAID&limit=100${cursor ? `&cursor=${cursor}` : ''}`;
+    const res = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${process.env.MOUV_API_KEY}` },
+    }).then(r => r.json());
+    all.push(...res.items);
+    cursor = res.nextCursor;
+  } while (cursor);
+  return all;
+}
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "items": [
+    {
+      "id": "dep_8e39f393-...",
+      "status": "PAID",
+      "amountCents": 100000,
+      "feeAmountCents": 1100,
+      "ivaAmountCents": 209,
+      "netCreditedCents": 98691,
+      "payerFirstName": "Juan",
+      "payerLastName": "Pérez",
+      "payerDocument": "1018485810",
+      "payerEmail": "juan@example.com",
+      "internalRef": "factura-001",
+      "paidAt": "2026-05-25T20:15:00.000Z",
+      "createdAt": "2026-05-25T20:00:00.000Z"
+    }
+  ],
+  "nextCursor": null
+}
+```
+
+</ResponseExample>

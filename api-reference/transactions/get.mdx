@@ -1,0 +1,41 @@
+---
+title: GET /wallets/transactions/:id
+description: Detalle de una transacción
+api: 'GET https://consola.mouvlatam.com/api/wallets/transactions/:id'
+---
+
+Detalle completo de una transacción (outflow o inflow). **Scope**: `READ`.
+
+## URL params
+
+<ParamField path="id" type="string" required>UUID de la transacción</ParamField>
+
+## Response 200
+
+Mismo shape que un item de `GET /wallets/transactions` con campos adicionales:
+
+<ResponseField name="bankName" type="string | null">Banco destino (ACH) o banco origen (BREB inbound)</ResponseField>
+<ResponseField name="bankAccountType" type="string | null">`Ahorros` / `Corriente` (ACH)</ResponseField>
+<ResponseField name="bankAccountNumber" type="string | null">Cuenta destino enmascarada (últimos 4)</ResponseField>
+<ResponseField name="description" type="string | null">Memo que proveíste</ResponseField>
+<ResponseField name="errorMessage" type="string | null">Si `status=FAILED`, mensaje del rail upstream</ResponseField>
+
+## Ejemplo
+
+```bash
+curl "https://consola.mouvlatam.com/api/wallets/transactions/8e39f393-..." \
+  -H "Authorization: Bearer mvk_..."
+```
+
+## Response 404
+
+```json
+{
+  "error": "TRANSACTION_NOT_FOUND",
+  "message": "La transacción no existe o no pertenece a tu empresa"
+}
+```
+
+<Note>
+La response 404 es la misma cuando la transacción NO existe Y cuando existe pero pertenece a otra empresa — no leakea información sobre si el ID es válido en otra cuenta. Defense in depth.
+</Note>

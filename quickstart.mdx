@@ -1,0 +1,196 @@
+---
+title: Quickstart
+description: Hacé tu primera request en 5 minutos
+---
+
+## Pre-requisitos
+
+<Steps>
+  <Step title="Cuenta Mouv activa">
+    Si todavía no la tenés, contactá <a href="mailto:hola@vectora.com.co">hola@vectora.com.co</a> para onboarding.
+  </Step>
+  <Step title="API key generada">
+    Seguí los pasos en [Autenticación](/authentication). Para este quickstart usá scope **WRITE**.
+  </Step>
+  <Step title="curl + jq instalados">
+    Para los ejemplos de esta guía. Cualquier HTTP client funciona (Postman, Insomnia, fetch, axios, requests, etc.).
+  </Step>
+</Steps>
+
+## 1. Verificá tu saldo
+
+```bash
+curl -s https://consola.mouvlatam.com/api/wallets/balance \
+  -H "Authorization: Bearer mvk_TU_LLAVE_ACA" \
+  | jq
+```
+
+Respuesta esperada:
+
+```json
+{
+  "currency": "COP",
+  "wallets": [
+    {
+      "rail": "BREB",
+      "type": "FAST",
+      "availableCents": "5000000",
+      "pendingOutCents": "0",
+      "totalCents": "5000000",
+      "version": 12,
+      "maxTransferAmount": 4900000
+    },
+    {
+      "rail": "ACH",
+      "type": "ACH",
+      "availableCents": "138305296",
+      "pendingOutCents": "0",
+      "totalCents": "138305296",
+      "version": 47,
+      "maxTransferAmount": 137000000
+    }
+  ],
+  "consolidated": {
+    "availableCents": "143305296",
+    "pendingOutCents": "0",
+    "totalCents": "143305296",
+    "currency": "COP"
+  }
+}
+```
+
+<Note>
+`rail` es el campo público (`BREB` o `ACH`). `type` (`FAST` / `ACH`) es legacy y se mantiene por backward compat — para integraciones nuevas usá `rail`.
+</Note>
+
+## 2. Resolvé una llave Bre-B
+
+```bash
+curl -s -X POST https://consola.mouvlatam.com/api/transfers/resolve-key \
+  -H "Authorization: Bearer mvk_TU_LLAVE_ACA" \
+  -H "Content-Type: application/json" \
+  -d '{ "keyValue": "3115551234" }' \
+  | jq
+```
+
+Respuesta exitosa:
+
+```json
+{
+  "found": true,
+  "anchorHandle": "tel:573115551234@breb",
+  "keyType": "PHONE",
+  "keyValue": "3115551234",
+  "recipient": {
+    "firstName": "JUAN",
+    "lastName": "PEREZ",
+    "fullName": "JUAN PEREZ",
+    "bankName": "Banco Bancolombia",
+    "bankAccountType": "Ahorros",
+    "status": "active",
+    "idType": "CC",
+    "idValue": "1018485810"
+  }
+}
+```
+
+<Tip>
+Omitimos `keyType` — la API auto-detecta el tipo desde la red Bre-B (Pix Brasil DICT-style pattern). El response te dice qué tipo identificó.
+</Tip>
+
+## 3. Cotizá una transferencia BREB
+
+```bash
+curl -s -X POST https://consola.mouvlatam.com/api/transfers/quote \
+  -H "Authorization: Bearer mvk_TU_LLAVE_ACA" \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": 100000, "keyValue": "3115551234" }' \
+  | jq
+```
+
+Respuesta:
+
+```json
+{
+  "amount": 100000,
+  "currentBalance": 5000000,
+  "feeBreakdown": {
+    "fixedFee": 1100,
+    "variableFee": 0,
+    "subtotalFee": 1100,
+    "ivaApplicable": true,
+    "ivaAmount": 209,
+    "totalCharged": 1309
+  },
+  "totalCost": 101309,
+  "canAfford": true,
+  "message": null
+}
+```
+
+## 4. Ejecutá el retiro
+
+```bash
+curl -s -X POST https://consola.mouvlatam.com/api/transfers/send \
+  -H "Authorization: Bearer mvk_TU_LLAVE_ACA" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 100000,
+    "destination": {
+      "brebKey": { "type": "PHONE", "value": "3115551234" }
+    },
+    "targetName": "JUAN PEREZ",
+    "targetDocument": "1018485810",
+    "reference": "Pago factura #001"
+  }' \
+  | jq
+```
+
+Respuesta (201):
+
+```json
+{
+  "id": "8e39f393-...-uuid",
+  "status": "PENDING",
+  "amount": 100000,
+  "totalFee": 1100,
+  "ivaAmount": 209,
+  "netAmount": 98691,
+  "currency": "COP",
+  "rail": "BREB",
+  "targetName": "JUAN PEREZ",
+  "targetDocument": "1018485810",
+  "createdAt": "2026-05-25T20:00:00.000Z"
+}
+```
+
+<Warning>
+`targetName` + `targetDocument` son **obligatorios SARLAFT**. Sacalos del response de `/transfers/resolve-key` (campos `recipient.fullName` + `recipient.idValue`).
+</Warning>
+
+## 5. Consultá el estado
+
+La transferencia inicia en `PENDING` y pasa a `COMPLETED` cuando el rail Bre-B confirma (~5-30s). Polleá el estado:
+
+```bash
+curl -s "https://consola.mouvlatam.com/api/wallets/transactions/8e39f393-..." \
+  -H "Authorization: Bearer mvk_TU_LLAVE_ACA" \
+  | jq .status
+```
+
+## Próximos pasos
+
+<CardGroup cols={2}>
+  <Card title="Retiros ACH" icon="building-columns" href="/api-reference/transfers/send">
+    Aprendé a transferir a cuentas bancarias tradicionales
+  </Card>
+  <Card title="Recaudos PSE" icon="circle-down" href="/api-reference/deposits/create-pse">
+    Generá links PSE para cobrar a terceros
+  </Card>
+  <Card title="Multi-sig" icon="users" href="/scopes-and-permissions">
+    Configurá firma múltiple para transferencias grandes
+  </Card>
+  <Card title="Manejo de errores" icon="triangle-exclamation" href="/errors">
+    Códigos de error completos y cómo reintentar
+  </Card>
+</CardGroup>

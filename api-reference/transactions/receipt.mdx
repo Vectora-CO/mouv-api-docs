@@ -1,0 +1,45 @@
+---
+title: GET /wallets/transactions/:id/receipt.pdf
+description: Comprobante PDF de una transacción
+---
+
+PDF descargable del comprobante de una transacción. Apto para guardar como evidencia fiscal o compartir con el destinatario.
+
+**Scope**: `READ`
+
+## URL params
+
+<ParamField path="id" type="string" required>UUID de la transacción</ParamField>
+
+## Response 200
+
+Content-Type: `application/pdf`
+Content-Disposition: `attachment; filename="mouv-comprobante-<id>.pdf"`
+
+Body: bytes del PDF.
+
+## Ejemplo
+
+```bash
+curl -o comprobante.pdf \
+  "https://consola.mouvlatam.com/api/wallets/transactions/8e39f393-.../receipt.pdf" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+```javascript Node.js
+import { createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+
+async function downloadReceipt(transactionId) {
+  const res = await fetch(
+    `https://consola.mouvlatam.com/api/wallets/transactions/${transactionId}/receipt.pdf`,
+    { headers: { 'Authorization': `Bearer ${process.env.MOUV_API_KEY}` } }
+  );
+  if (!res.ok) throw new Error('Failed to download receipt');
+  await pipeline(res.body, createWriteStream(`comprobante-${transactionId}.pdf`));
+}
+```
+
+## Receipt para deposits PSE
+
+Análogo: `GET /wallets/deposits/:id/receipt.pdf`. Mismo formato, mismo scope.

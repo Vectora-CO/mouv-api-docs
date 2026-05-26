@@ -1,0 +1,59 @@
+---
+title: Introducción
+description: API REST de Mouv Platform para integraciones cliente
+---
+
+## Bienvenido
+
+La API de **Mouv Platform** te permite integrar pagos digitales colombianos directamente en tu sistema: leer saldos, hacer retiros vía Bre-B o ACH, y generar links de recaudo PSE — todo desde una única API REST.
+
+```bash
+curl https://consola.mouvlatam.com/api/wallets/balance \
+  -H "Authorization: Bearer mvk_..."
+```
+
+## Conceptos públicos
+
+La API expone solo **rails de pago colombianos** (BREB, ACH, PSE). Los proveedores subyacentes nunca son parte del contrato público — Mouv abstrae múltiples BaaS para que tu integración no dependa de uno específico.
+
+<CardGroup cols={2}>
+  <Card title="BREB" icon="bolt">
+    Sistema interbancario instantáneo del Banco de la República (alias, celular, correo, cédula). Cap individual **$12M COP**.
+  </Card>
+  <Card title="ACH" icon="building-columns">
+    Transferencias a cuentas bancarias tradicionales (Ahorros / Corriente / Depósito electrónico). Cap individual **$2.000M COP**.
+  </Card>
+  <Card title="PSE" icon="circle-down">
+    Recaudo entrante — generás un link, el pagador completa el flujo PSE, el monto neto se acredita a tu wallet ACH.
+  </Card>
+  <Card title="Multi-tenant" icon="lock">
+    Cada API key está bound a UNA cuenta empresarial. Acceso scoped a tus propios datos. Revocación instantánea.
+  </Card>
+</CardGroup>
+
+## Cómo está organizada esta documentación
+
+<Steps>
+  <Step title="Comenzá por autenticación">
+    [Generá una API key](/authentication) desde tu dashboard cliente.
+  </Step>
+  <Step title="Quickstart">
+    Hacé tu [primera request](/quickstart) en menos de 5 minutos.
+  </Step>
+  <Step title="API Reference">
+    Explorá cada endpoint en el menú lateral, organizado por rail.
+  </Step>
+  <Step title="Maneja errores">
+    Consultá la [referencia de códigos de error](/errors) para integrar manejo robusto.
+  </Step>
+</Steps>
+
+## Versionado
+
+La API actual NO tiene prefijo de versión (`/api/...`). Cualquier breaking change se comunica vía email a `developers@vectora.com.co` con **30 días de aviso mínimo**. Cambios additivos (campos nuevos, endpoints nuevos) NO son breaking y se despliegan sin aviso previo.
+
+Consultá el [changelog](/changelog) (próximamente) para detalle por versión.
+
+## Soporte
+
+Para reportar bugs, solicitar features o consultas comerciales: <a href="mailto:hola@vectora.com.co">hola@vectora.com.co</a>

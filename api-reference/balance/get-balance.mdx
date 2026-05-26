@@ -1,0 +1,129 @@
+---
+title: GET /wallets/balance
+description: Obtener saldo BREB + ACH + consolidado
+api: 'GET https://consola.mouvlatam.com/api/wallets/balance'
+---
+
+Retorna el saldo de ambas wallets (BREB + ACH) y el consolidado.
+
+**Scope requerido**: `READ`
+
+## Headers
+
+| Header | Valor |
+|---|---|
+| `Authorization` | `Bearer mvk_...` |
+
+## Response 200
+
+<ResponseField name="currency" type="string">
+  Siempre `"COP"` (Mouv solo opera pesos colombianos en V1)
+</ResponseField>
+
+<ResponseField name="wallets" type="array">
+  Array de wallets disponibles para tu empresa
+  <Expandable title="Schema de wallet">
+    <ResponseField name="rail" type="string">
+      `"BREB"` o `"ACH"` — campo semántico público (recomendado)
+    </ResponseField>
+    <ResponseField name="type" type="string">
+      `"FAST"` o `"ACH"` — legacy/interno, mantener por backward compat
+    </ResponseField>
+    <ResponseField name="availableCents" type="string">
+      Saldo disponible en centavos (BigInt-safe string). Dividí por 100 para pesos.
+    </ResponseField>
+    <ResponseField name="pendingOutCents" type="string">
+      Fondos reservados por transferencias `PENDING` (centavos)
+    </ResponseField>
+    <ResponseField name="totalCents" type="string">
+      `availableCents + pendingOutCents` (centavos)
+    </ResponseField>
+    <ResponseField name="version" type="number">
+      Optimistic-locking version — incrementa con cada movimiento
+    </ResponseField>
+    <ResponseField name="maxTransferAmount" type="number">
+      Máximo que podés enviar **incluyendo** fee + IVA (centavos enteros)
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="consolidated" type="object">
+  Suma cross-wallet — equivalente al "Saldo total" del dashboard
+  <Expandable title="Schema">
+    <ResponseField name="availableCents" type="string">Sum of `wallets[].availableCents`</ResponseField>
+    <ResponseField name="pendingOutCents" type="string">Sum of `wallets[].pendingOutCents`</ResponseField>
+    <ResponseField name="totalCents" type="string">`availableCents + pendingOutCents`</ResponseField>
+    <ResponseField name="currency" type="string">`"COP"`</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Ejemplo
+
+<RequestExample>
+
+```bash curl
+curl -X GET https://consola.mouvlatam.com/api/wallets/balance \
+  -H "Authorization: Bearer mvk_a1b2c3d4..."
+```
+
+```javascript Node.js
+const res = await fetch('https://consola.mouvlatam.com/api/wallets/balance', {
+  headers: { 'Authorization': `Bearer ${process.env.MOUV_API_KEY}` },
+});
+const data = await res.json();
+console.log('Saldo BREB:', data.wallets.find(w => w.rail === 'BREB').availableCents);
+console.log('Saldo ACH:', data.wallets.find(w => w.rail === 'ACH').availableCents);
+console.log('Total:', data.consolidated.availableCents);
+```
+
+```python Python
+import requests
+res = requests.get(
+    'https://consola.mouvlatam.com/api/wallets/balance',
+    headers={'Authorization': f'Bearer {os.environ["MOUV_API_KEY"]}'}
+)
+data = res.json()
+print(f'Saldo BREB: {data["wallets"][0]["availableCents"]}')
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "currency": "COP",
+  "wallets": [
+    {
+      "rail": "BREB",
+      "type": "FAST",
+      "availableCents": "5000000",
+      "pendingOutCents": "0",
+      "totalCents": "5000000",
+      "version": 12,
+      "maxTransferAmount": 4900000
+    },
+    {
+      "rail": "ACH",
+      "type": "ACH",
+      "availableCents": "138305296",
+      "pendingOutCents": "0",
+      "totalCents": "138305296",
+      "version": 47,
+      "maxTransferAmount": 137000000
+    }
+  ],
+  "consolidated": {
+    "availableCents": "143305296",
+    "pendingOutCents": "0",
+    "totalCents": "143305296",
+    "currency": "COP"
+  }
+}
+```
+
+</ResponseExample>
+
+## Caching
+
+El response incluye `Cache-Control: private, max-age=10`. Cacheá 10s en tu cliente para reducir tráfico — la wallet no cambia más rápido que cada movimiento, y los movimientos invalidan tu cache vía signal aplicacional (response.version increment).

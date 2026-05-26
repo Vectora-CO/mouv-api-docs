@@ -1,0 +1,153 @@
+---
+title: POST /deposits/pse
+description: Generar link PSE para recaudar a tu wallet
+api: 'POST https://consola.mouvlatam.com/api/deposits/pse'
+---
+
+Genera un link PSE (pagosseguros.com.co) que un tercero usa para pagarte. Cuando el pagador completa el flujo, Mouv:
+1. Confirma con el proveedor PSE
+2. Acredita el monto **neto** (gross - fee - IVA) a tu wallet ACH
+3. El status del deposit pasa a `PAID`
+
+**Scope requerido**: `WRITE`
+
+## Body
+
+<ParamField body="amountCents" type="number" required>
+  Monto que el pagador debe pagar (centavos). Mínimo 100.
+</ParamField>
+
+<ParamField body="payerDocumentTypeId" type="number" required>
+  `1` = CC, `4` = CE, `5` = Pasaporte, `8` = NIT.
+</ParamField>
+
+<ParamField body="payerDocumentNumber" type="string" required>
+  5-15 dígitos.
+</ParamField>
+
+<ParamField body="payerFirstName" type="string" required>
+  Nombres del pagador.
+</ParamField>
+
+<ParamField body="payerLastName" type="string" required>
+  Apellidos del pagador.
+</ParamField>
+
+<ParamField body="payerEmail" type="string" required>
+  Email válido — se usa para enviar el link si llamás `/share-email`.
+</ParamField>
+
+<ParamField body="payerPhone" type="string">
+  Opcional. Celular Colombia 10 dígitos.
+</ParamField>
+
+<ParamField body="internalRef" type="string">
+  Opcional. Tu identificador interno (ej. `factura-001`). Aparece en el listado y receipt.
+</ParamField>
+
+## Response 201
+
+<ResponseField name="id" type="string">UUID del deposit (`dep_...`)</ResponseField>
+<ResponseField name="status" type="string">`PENDING_CONFIRM` al inicio</ResponseField>
+<ResponseField name="amountCents" type="number">Lo que cotizaste</ResponseField>
+<ResponseField name="currency" type="string">`"COP"`</ResponseField>
+<ResponseField name="paygatewayUrl" type="string">**Compartilo con el pagador**. El link expira en 24h.</ResponseField>
+<ResponseField name="expiresAt" type="string">ISO 8601 — cuándo expira el link si no se paga</ResponseField>
+<ResponseField name="internalRef" type="string">Tu reference (si lo proveíste)</ResponseField>
+<ResponseField name="createdAt" type="string">ISO 8601</ResponseField>
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/deposits/pse \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amountCents": 100000,
+    "payerDocumentTypeId": 1,
+    "payerDocumentNumber": "1018485810",
+    "payerFirstName": "Juan",
+    "payerLastName": "Pérez",
+    "payerEmail": "juan@example.com",
+    "payerPhone": "3115551234",
+    "internalRef": "factura-001"
+  }'
+```
+
+```javascript Node.js
+const deposit = await fetch('https://consola.mouvlatam.com/api/deposits/pse', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({
+    amountCents: 100000,
+    payerDocumentTypeId: 1,
+    payerDocumentNumber: '1018485810',
+    payerFirstName: 'Juan',
+    payerLastName: 'Pérez',
+    payerEmail: 'juan@example.com',
+    internalRef: 'factura-001',
+  }),
+}).then(r => r.json());
+
+// Enviá el link al pagador (por email/SMS/dashboard tu sistema)
+console.log(`Link de pago: ${deposit.paygatewayUrl}`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 201 Created
+{
+  "id": "dep_8e39f393-...",
+  "status": "PENDING_CONFIRM",
+  "amountCents": 100000,
+  "currency": "COP",
+  "paygatewayUrl": "https://pse.proveedor.com/pse?id=abc123",
+  "expiresAt": "2026-05-26T20:00:00.000Z",
+  "internalRef": "factura-001",
+  "createdAt": "2026-05-25T20:00:00.000Z"
+}
+```
+
+```json 422 Fee excede el monto
+{
+  "error": "FEE_EXCEEDS_AMOUNT",
+  "message": "El monto del depósito es menor que la comisión configurada.",
+  "details": {
+    "grossCents": 100000,
+    "totalFee": 1100,
+    "ivaAmount": 209,
+    "totalCharged": 101309
+  }
+}
+```
+
+</ResponseExample>
+
+## Lifecycle del deposit
+
+| Status | Significado |
+|---|---|
+| `PENDING_CONFIRM` | Link generado, esperando pago del pagador |
+| `PAID` | Pagador completó PSE, monto neto acreditado a tu wallet ACH |
+| `FAILED` | Pagador intentó pero falló (ej. fondos insuficientes en su banco) |
+| `EXPIRED` | 24h sin pagar — el link ya no es válido |
+
+## Webhooks (próximamente)
+
+Cuando habilitemos webhooks salientes, recibirás un POST a tu URL configurada con evento `deposit.paid` cuando el pago confirme — sin tener que pollear.
+
+## Tip — flujo recomendado
+
+1. Cliente cobra a un cliente final (factura emitida en tu sistema)
+2. Tu sistema llama `POST /deposits/pse` con los datos del pagador + tu `internalRef`
+3. Mostrás el `paygatewayUrl` al pagador (o llamás `/share-email` para enviarlo)
+4. Pagador completa PSE en su banco
+5. Tu sistema pollea `GET /deposits?status=PAID` cada N min (o espera webhook) y matchea por `internalRef`
+6. Marca factura como pagada en tu sistema

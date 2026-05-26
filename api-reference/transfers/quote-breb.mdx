@@ -1,0 +1,99 @@
+---
+title: POST /transfers/quote (BREB)
+description: Cotizar transferencia BREB sin comprometer fondos
+api: 'POST https://consola.mouvlatam.com/api/transfers/quote'
+---
+
+Calcula comisión, IVA y total a debitar de tu wallet BREB para una transferencia. **No reserva fondos**.
+
+**Scope requerido**: `WRITE`
+
+## Body
+
+<ParamField body="amount" type="number" required>
+  Monto BRUTO a transferir en centavos (no incluye fee/IVA). Mínimo 100 (= $1 COP), máximo según cap individual BREB ($12M COP = 1_200_000_000 centavos).
+</ParamField>
+
+<ParamField body="keyValue" type="string" required>
+  Llave Bre-B destino (idéntico shape al de `/resolve-key`).
+</ParamField>
+
+<ParamField body="keyType" type="string" default="AUTO">
+  Opcional. Default `AUTO` — Mouv infiere.
+</ParamField>
+
+## Response 200
+
+<ResponseField name="amount" type="number">Monto bruto que cotizaste (centavos)</ResponseField>
+<ResponseField name="currentBalance" type="number">Tu saldo BREB disponible al momento del quote</ResponseField>
+<ResponseField name="feeBreakdown" type="object">
+  <Expandable title="Schema">
+    <ResponseField name="fixedFee" type="number">Comisión fija (centavos)</ResponseField>
+    <ResponseField name="variableFee" type="number">Comisión variable (centavos)</ResponseField>
+    <ResponseField name="subtotalFee" type="number">`fixedFee + variableFee`</ResponseField>
+    <ResponseField name="ivaApplicable" type="boolean">`true` si la empresa está en régimen común</ResponseField>
+    <ResponseField name="ivaAmount" type="number">IVA 19% sobre subtotalFee (centavos)</ResponseField>
+    <ResponseField name="totalCharged" type="number">`subtotalFee + ivaAmount`</ResponseField>
+  </Expandable>
+</ResponseField>
+<ResponseField name="totalCost" type="number">`amount + totalCharged` (lo que se debita)</ResponseField>
+<ResponseField name="canAfford" type="boolean">`true` si `currentBalance >= totalCost`</ResponseField>
+<ResponseField name="message" type="string | null">Mensaje human-readable si `canAfford=false`</ResponseField>
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/transfers/quote \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": 100000, "keyValue": "3115551234" }'
+```
+
+```javascript Node.js
+const quote = await fetch('https://consola.mouvlatam.com/api/transfers/quote', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ amount: 100000, keyValue: '3115551234' }),
+}).then(r => r.json());
+
+if (!quote.canAfford) {
+  throw new Error(`Saldo insuficiente: ${quote.message}`);
+}
+console.log(`Total a debitar: ${quote.totalCost / 100} COP`);
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "amount": 100000,
+  "currentBalance": 5000000,
+  "feeBreakdown": {
+    "fixedFee": 1100,
+    "variableFee": 0,
+    "subtotalFee": 1100,
+    "ivaApplicable": true,
+    "ivaAmount": 209,
+    "totalCharged": 1309
+  },
+  "totalCost": 101309,
+  "canAfford": true,
+  "message": null
+}
+```
+
+</ResponseExample>
+
+## Tips
+
+- **Quote es idempotente**: hacé múltiples quotes sin riesgo de duplicar nada
+- **Quote NO bloquea fondos**: si pasan minutos entre quote y send, recalculá
+- **Comisión depende del rail + tipo de operación**: BREB outflow tiene su propia FeeConfig (`BREB_OUTFLOW`)
+- Bre-B individual cap: **$12M COP por transferencia**. Para montos mayores usá ACH.

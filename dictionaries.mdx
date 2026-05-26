@@ -1,0 +1,73 @@
+---
+title: Diccionarios
+description: Bancos, tipos de cuenta, tipos de documento — IDs estables
+---
+
+Mouv expone diccionarios estables para los IDs que necesitás al crear retiros ACH. Estos endpoints NO requieren autenticación (son data pública).
+
+## Bancos ACH
+
+<ParamField path="GET /api/dictionaries/banks/ach">
+  Lista de bancos colombianos válidos para retiros ACH. Cache 1h del lado servidor.
+</ParamField>
+
+```bash
+curl https://consola.mouvlatam.com/api/dictionaries/banks/ach | jq
+```
+
+Response 200:
+
+```json
+[
+  { "id": 1, "name": "Banco Agrario", "iconUrl": "https://..." },
+  { "id": 27, "name": "Banco Bancolombia", "iconUrl": "https://..." },
+  { "id": 32, "name": "Banco Davivienda", "iconUrl": "https://..." },
+  { "id": 49, "name": "Nequi", "iconUrl": "https://..." },
+  ...
+]
+```
+
+Los IDs son estables — Mouv añade IDs nuevos cuando se onboardean bancos nuevos (additive, nunca renumera). Cacheá la lista en tu sistema con TTL 24h y refrescala periódicamente.
+
+## Tipos de cuenta (`accountTypeId`)
+
+Constantes hardcoded:
+
+| ID | Nombre | Equivalente Coink internal |
+|---|---|---|
+| `20` | Ahorros | SVGS |
+| `21` | Corriente | CHCK |
+| `22` | Depósito electrónico | (Nequi/Daviplata-style) |
+
+## Tipos de documento (`documentTypeId`)
+
+| ID | Nombre | Uso típico |
+|---|---|---|
+| `1` | Cédula de Ciudadanía (CC) | Persona natural colombiana |
+| `4` | Cédula de Extranjería (CE) | Extranjero residente |
+| `5` | Pasaporte (PAS) | Extranjero no residente |
+| `8` | NIT | Persona jurídica colombiana |
+
+<Note>
+Estos IDs son los oficiales de la red ACH colombiana (heredados del estándar Coink BaaS). Mouv NO acepta otros tipos en V1 (ej. tarjeta de identidad TI, registro civil RC — Bre-B y ACH no transactean con menores).
+</Note>
+
+## Status de deposit PSE
+
+| Status | Significado |
+|---|---|
+| `PENDING_CONFIRM` | Link generado, esperando pago |
+| `PAID` | Pagador completó PSE, monto neto en wallet |
+| `FAILED` | Pagador intentó pero falló |
+| `EXPIRED` | 24h sin pagar |
+
+## Status de transacción (outflow)
+
+| Status | Significado |
+|---|---|
+| `PENDING` | Reservado en wallet, esperando rail |
+| `AWAITING_APPROVAL` | Multi-sig activo, espera firmas |
+| `EXECUTING` | Quorum alcanzado, dispatchando |
+| `COMPLETED` | Confirmado |
+| `FAILED` | Falló en el rail, fondos devueltos |
+| `EXPIRED` | TTL 24h multi-sig sin quorum |

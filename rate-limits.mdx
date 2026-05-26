@@ -1,0 +1,68 @@
+---
+title: Rate limits
+description: Límites de requests por tipo de endpoint
+---
+
+Mouv aplica rate limiting por IP origen sobre el header `X-Forwarded-For` (vía CloudFront). Los límites se aplican por minuto rolling window.
+
+## Límites actuales
+
+| Tipo de endpoint | Límite | Endpoints incluidos |
+|---|---|---|
+| Lectura | **100 req/min** | `GET /wallets/balance`, `GET /wallets/transactions*`, `GET /deposits` |
+| Quote (preview fee) | **30 req/min** | `POST /transfers/quote`, `POST /transfers/quote/ach` |
+| Resolve key | **30 req/min** | `POST /transfers/resolve-key` |
+| Operaciones financieras | **10 req/min** | `POST /transfers/send`, `POST /deposits/pse`, `POST /deposits/:id/share-email` |
+| Authentication (no API) | **5 req/min** | `POST /auth/*` (no aplica a API keys) |
+
+## Respuesta cuando se excede
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
+Content-Type: application/json
+
+{
+  "error": "RATE_LIMIT_EXCEEDED",
+  "message": "Demasiadas requests — esperar 42 segundos",
+  "retryAfter": 42
+}
+```
+
+El header `Retry-After` indica los segundos exactos hasta que la ventana se libera. La respuesta `429` NO consume cuota adicional.
+
+## Estrategia recomendada
+
+```javascript
+async function mouvFetch(url, options) {
+  const res = await fetch(url, options);
+  if (res.status === 429) {
+    const wait = parseInt(res.headers.get('Retry-After') || '1') * 1000;
+    console.warn(`Rate limited, waiting ${wait}ms`);
+    await new Promise(r => setTimeout(r, wait));
+    return mouvFetch(url, options); // retry una vez
+  }
+  return res;
+}
+```
+
+## Tips para evitar rate limiting
+
+<CardGroup cols={2}>
+  <Card title="Cachear saldo">
+    `GET /wallets/balance` retorna header `Cache-Control: private, max-age=10`. Cacheá 10s en tu cliente — reduce ~50% del tráfico.
+  </Card>
+  <Card title="Batch consultas">
+    En lugar de N llamadas a `/transactions/:id`, usá `/transactions` con paginación. Una sola request retorna hasta 100 movimientos.
+  </Card>
+  <Card title="Webhooks (próximo)">
+    Cuando habilitemos webhooks salientes, podrás recibir notificaciones de `transfer.completed` en lugar de pollear estados.
+  </Card>
+  <Card title="Backoff exponencial">
+    Si recibís 429 dos veces seguidas, hacé backoff `2^n * 1000ms` (1s, 2s, 4s, 8s). Industry pattern Stripe/Plaid.
+  </Card>
+</CardGroup>
+
+## Límites elevados (enterprise)
+
+Si tu volumen requiere más capacidad (>500 retiros/día sostenidos o >100 PSE links/día), contactanos en <a href="mailto:hola@vectora.com.co">hola@vectora.com.co</a>. Configuramos límites custom per-cliente con visibility métrica.

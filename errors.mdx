@@ -1,0 +1,142 @@
+---
+title: Códigos de error
+description: Referencia completa de errores de la API
+---
+
+## Estructura de errores
+
+Todas las respuestas de error tienen este shape:
+
+```json
+{
+  "error": "CODIGO_MAYUSCULAS_SNAKE_CASE",
+  "message": "Descripción human-readable en español",
+  "details": { /* opcional, contextual */ }
+}
+```
+
+| Status | Significado | Acción recomendada |
+|---|---|---|
+| 400 | Body inválido | Corregir request |
+| 401 | API key inválida o no presente | Verificar header Authorization |
+| 403 | Scope insuficiente o cuenta inactiva | Regenerar llave con scope correcto |
+| 404 | Recurso no encontrado | Verificar ID |
+| 422 | Validación lógica falló | Mensaje propio del error |
+| 429 | Rate limit excedido | Esperar `Retry-After` segundos |
+| 502 | Error del proveedor upstream | Reintento con backoff exponencial |
+| 503 | Servicio temporalmente no disponible | Reintento con backoff |
+
+## Errores comunes
+
+| Código | Status | Significado |
+|---|---|---|
+| `AUTH_REQUIRED` | 401 | Falta header Authorization |
+| `INVALID_API_KEY` | 401 | Llave inválida o revocada |
+| `COMPANY_INACTIVE` | 401 | Cuenta suspendida — contactar soporte |
+| `INSUFFICIENT_SCOPE` | 403 | Llave READ intentando operación WRITE |
+| `API_KEY_AUTH_NOT_ALLOWED` | 403 | Operación requiere sesión dashboard (no API key) |
+| `RATE_LIMIT_EXCEEDED` | 429 | Demasiadas requests — esperar `Retry-After` |
+| `INVALID_REQUEST` | 400 | Body o query parameters inválidos |
+
+## Saldos
+
+| Código | Status | Significado |
+|---|---|---|
+| `WALLET_NOT_PROVISIONED` | 404 | La empresa aún no tiene wallet aprovisionada |
+| `FAST_WALLET_MISSING` | 404 | Schema invariant defensivo — contactar soporte |
+
+## Retiros BREB
+
+| Código | Status | Significado |
+|---|---|---|
+| `BREB_DIRECTORY_LOOKUP_FAILED` | 503 | Red Bre-B no responde — reintento con backoff |
+| `INVALID_KEY` | 422 | Llave Bre-B malformada |
+| `KEY_INACTIVE` | 422 | Llave existe pero no está activa en Bre-B |
+| `INSUFFICIENT_BALANCE` | 422 | Saldo BREB no alcanza para monto + fee + IVA |
+| `TARGET_DOCUMENT_REQUIRED` | 422 | Falta `targetDocument` (compliance SARLAFT) |
+| `AMOUNT_EXCEEDS_BREB_CAP` | 422 | Bre-B individual cap es $12M COP |
+| `NAME_MISMATCH` | 422 | Nombre cargado no coincide con titular Bre-B |
+
+## Retiros ACH
+
+| Código | Status | Significado |
+|---|---|---|
+| `ACH_RAIL_UNAVAILABLE` | 503 | Rail ACH temporalmente caído |
+| `INVALID_BANK_ACCOUNT` | 422 | Validación de cuenta falló (formato o titular) |
+| `INSUFFICIENT_BALANCE` | 422 | Saldo ACH no alcanza |
+| `AMOUNT_EXCEEDS_ACH_CAP` | 422 | ACH individual cap es $2.000M COP |
+| `DESTINATION_REJECTED` | 400 | Banco / cuenta rechazado por reglas internas |
+
+## Recaudos PSE
+
+| Código | Status | Significado |
+|---|---|---|
+| `PSE_PROVIDER_NOT_CONFIGURED` | 503 | Operator misconfig — contactar soporte |
+| `PSE_INFLOW_DISABLED` | 503 | PSE temporalmente bloqueado por incident response |
+| `PSE_PROVIDER_ERROR` | 502 | Proveedor PSE upstream falló — reintentar |
+| `FEE_EXCEEDS_AMOUNT` | 422 | FeeConfig produce fee+IVA >= monto del depósito |
+| `RECIPIENT_BLACKLISTED` | 422 | El pagador está en lista AML — bloqueado por compliance |
+
+## Multi-sig
+
+| Código | Status | Significado |
+|---|---|---|
+| `AWAITING_APPROVAL` | 200 (body) | Transferencia espera firmas (no es error técnico) |
+| `APPROVAL_EXPIRED` | 422 | TTL 24h expirado, transferencia revertida |
+| `INVALID_TOTP_CODE` | 401 | Código 2FA inválido al firmar |
+
+## AML / Counterparty limits
+
+| Código | Status | Significado |
+|---|---|---|
+| `COUNTERPARTY_DAILY_LIMIT_EXCEEDED` | 422 | Tope diario por tercero excedido |
+| `COUNTERPARTY_MONTHLY_LIMIT_EXCEEDED` | 422 | Tope mensual por tercero excedido |
+
+## Estrategia de reintentos recomendada
+
+```javascript
+async function mouvRequestWithRetry(url, options, maxRetries = 3) {
+  for (let i = 0; i < maxRetries; i++) {
+    const res = await fetch(url, options);
+
+    // Éxito
+    if (res.ok) return res.json();
+
+    const body = await res.json();
+
+    // Errores que NO se reintenan
+    if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 422) {
+      throw new Error(body.error);
+    }
+
+    // Rate limit: respect Retry-After
+    if (res.status === 429) {
+      const wait = parseInt(res.headers.get('Retry-After') || '1') * 1000;
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+
+    // 5xx: backoff exponencial
+    if (res.status >= 500) {
+      const wait = Math.pow(2, i) * 1000; // 1s, 2s, 4s
+      await new Promise(r => setTimeout(r, wait));
+      continue;
+    }
+  }
+  throw new Error('MAX_RETRIES_EXCEEDED');
+}
+```
+
+## Idempotencia
+
+Para operaciones financieras, el campo `reference` del request body actúa como **idempotency key** opcional. Si reenviás la misma request con el mismo `reference` dentro de los próximos 60s, recibís la transacción original en lugar de duplicar.
+
+```bash
+curl -X POST https://consola.mouvlatam.com/api/transfers/send \
+  -H "Authorization: Bearer mvk_..." \
+  -d '{ "amount": 100000, ..., "reference": "factura-001-2026" }'
+```
+
+Si la primera request 5xx-falló y reintentas con el mismo `reference`, Mouv resuelve el conflicto:
+- Si la operación original SÍ se dispatchó upstream → response original
+- Si NO se dispatchó → procesa la nueva request normalmente

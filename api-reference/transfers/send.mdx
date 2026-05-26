@@ -1,0 +1,250 @@
+---
+title: POST /transfers/send
+description: Ejecutar retiro BREB o ACH
+api: 'POST https://consola.mouvlatam.com/api/transfers/send'
+---
+
+Ejecuta un retiro. Un único endpoint maneja **ambos rails** (BREB + ACH) — el sistema discrimina por la forma del campo `destination`:
+
+- `destination.brebKey` → **BREB** (debita wallet BREB, dispatcha a red Bre-B)
+- `destination.bankAccount` → **ACH** (debita wallet ACH, dispatcha a banco destino)
+
+**Scope requerido**: `WRITE`
+
+## Body común
+
+<ParamField body="amount" type="number" required>
+  Monto BRUTO en centavos.
+</ParamField>
+
+<ParamField body="destination" type="object" required>
+  Una de: `brebKey` o `bankAccount` (mutuamente exclusivos).
+</ParamField>
+
+<ParamField body="reference" type="string">
+  Opcional. Tu identificador interno (max 100 chars). Actúa como idempotency key dentro de 60s.
+</ParamField>
+
+<ParamField body="description" type="string">
+  Opcional. Memo human-readable (max 255 chars).
+</ParamField>
+
+## Body BREB
+
+<ParamField body="destination.brebKey.type" type="string" required>
+  `PHONE`, `EMAIL`, `ALPHANUM`, o `NRIC`. Usá el `keyType` que retornó `/transfers/resolve-key`.
+</ParamField>
+
+<ParamField body="destination.brebKey.value" type="string" required>
+  El valor de la llave.
+</ParamField>
+
+<ParamField body="targetName" type="string" required>
+  Nombre completo del titular. **Sacalo de `/transfers/resolve-key` → `recipient.fullName`**.
+</ParamField>
+
+<ParamField body="targetDocument" type="string" required>
+  Número de documento del titular. **Sacalo de `/transfers/resolve-key` → `recipient.idValue`**. SARLAFT obligatorio.
+</ParamField>
+
+## Body ACH
+
+<ParamField body="destination.bankAccount.bankId" type="number" required>
+  ID del banco. Consultalo en [`GET /dictionaries/banks/ach`](/dictionaries).
+</ParamField>
+
+<ParamField body="destination.bankAccount.accountTypeId" type="number" required>
+  `20` = Ahorros, `21` = Corriente, `22` = Depósito electrónico.
+</ParamField>
+
+<ParamField body="destination.bankAccount.accountNumber" type="string" required>
+  4-32 dígitos.
+</ParamField>
+
+<ParamField body="destination.bankAccount.documentTypeId" type="number" required>
+  `1` = CC, `4` = CE, `5` = Pasaporte, `8` = NIT.
+</ParamField>
+
+<ParamField body="destination.bankAccount.documentNumber" type="string" required>
+  5-15 dígitos.
+</ParamField>
+
+<ParamField body="destination.bankAccount.holderFirstName" type="string" required>
+  Nombres del titular (max 64 chars).
+</ParamField>
+
+<ParamField body="destination.bankAccount.holderLastName" type="string" required>
+  Apellidos del titular (max 64 chars).
+</ParamField>
+
+## Response 201
+
+<ResponseField name="id" type="string">UUID de la transacción</ResponseField>
+<ResponseField name="status" type="string">`PENDING` (en flight), `COMPLETED` (confirmado), `FAILED`, o `AWAITING_APPROVAL` (multi-sig)</ResponseField>
+<ResponseField name="amount" type="number">Monto bruto (centavos)</ResponseField>
+<ResponseField name="totalFee" type="number">Comisión cobrada (centavos)</ResponseField>
+<ResponseField name="ivaAmount" type="number">IVA cobrado (centavos)</ResponseField>
+<ResponseField name="netAmount" type="number">`amount - totalFee` (lo que recibe el destinatario)</ResponseField>
+<ResponseField name="currency" type="string">`"COP"`</ResponseField>
+<ResponseField name="rail" type="string">`"BREB"` o `"ACH"` — el rail que se dispatchó</ResponseField>
+<ResponseField name="targetName" type="string">Titular destino</ResponseField>
+<ResponseField name="targetDocument" type="string">Documento destino</ResponseField>
+<ResponseField name="reference" type="string">Tu reference (si lo proveíste)</ResponseField>
+<ResponseField name="createdAt" type="string">ISO 8601 timestamp</ResponseField>
+
+## Ejemplos
+
+### Retiro BREB
+
+<RequestExample>
+
+```bash curl
+# 1. Resolver llave
+RECIPIENT=$(curl -s -X POST https://consola.mouvlatam.com/api/transfers/resolve-key \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "keyValue": "3115551234" }')
+
+# 2. Cotizar
+QUOTE=$(curl -s -X POST https://consola.mouvlatam.com/api/transfers/quote \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": 100000, "keyValue": "3115551234" }')
+
+# 3. Enviar
+curl -X POST https://consola.mouvlatam.com/api/transfers/send \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d "$(jq -n \
+    --arg name "$(echo $RECIPIENT | jq -r .recipient.fullName)" \
+    --arg doc "$(echo $RECIPIENT | jq -r .recipient.idValue)" \
+    --arg keyType "$(echo $RECIPIENT | jq -r .keyType)" \
+    '{
+      amount: 100000,
+      destination: { brebKey: { type: $keyType, value: "3115551234" } },
+      targetName: $name,
+      targetDocument: $doc,
+      reference: "factura-001"
+    }')"
+```
+
+```javascript Node.js
+// Flujo end-to-end BREB
+async function sendBreb(keyValue, amount, reference) {
+  const headers = {
+    'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+    'Content-Type': 'application/json',
+  };
+
+  // 1. Resolver
+  const resolve = await fetch('https://consola.mouvlatam.com/api/transfers/resolve-key', {
+    method: 'POST', headers, body: JSON.stringify({ keyValue }),
+  }).then(r => r.json());
+  if (!resolve.found) throw new Error('Llave no encontrada');
+
+  // 2. Cotizar
+  const quote = await fetch('https://consola.mouvlatam.com/api/transfers/quote', {
+    method: 'POST', headers, body: JSON.stringify({ amount, keyValue }),
+  }).then(r => r.json());
+  if (!quote.canAfford) throw new Error(`Saldo insuficiente: ${quote.message}`);
+
+  // 3. Enviar
+  const send = await fetch('https://consola.mouvlatam.com/api/transfers/send', {
+    method: 'POST', headers, body: JSON.stringify({
+      amount,
+      destination: { brebKey: { type: resolve.keyType, value: keyValue } },
+      targetName: resolve.recipient.fullName,
+      targetDocument: resolve.recipient.idValue,
+      reference,
+    }),
+  }).then(r => r.json());
+
+  return send;
+}
+```
+
+</RequestExample>
+
+### Retiro ACH
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/transfers/send \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "amount": 5000000,
+    "destination": {
+      "bankAccount": {
+        "bankId": 27,
+        "accountTypeId": 20,
+        "accountNumber": "59455583201",
+        "documentTypeId": 1,
+        "documentNumber": "1018485810",
+        "holderFirstName": "Juan",
+        "holderLastName": "Pérez"
+      }
+    },
+    "reference": "nomina-mayo-2026"
+  }'
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 201 Created
+{
+  "id": "8e39f393-...-uuid",
+  "status": "PENDING",
+  "amount": 100000,
+  "totalFee": 1100,
+  "ivaAmount": 209,
+  "netAmount": 98900,
+  "currency": "COP",
+  "rail": "BREB",
+  "targetName": "JUAN PEREZ",
+  "targetDocument": "1018485810",
+  "reference": "factura-001",
+  "createdAt": "2026-05-25T20:00:00.000Z"
+}
+```
+
+```json 200 Multi-sig pendiente
+{
+  "id": "8e39f393-...",
+  "status": "AWAITING_APPROVAL",
+  "approvalId": "appr_...",
+  "threshold": 2,
+  "expiresAt": "2026-05-26T20:00:00.000Z",
+  "amount": 100000,
+  "rail": "BREB"
+}
+```
+
+</ResponseExample>
+
+## Status lifecycle
+
+| Status | Significado |
+|---|---|
+| `PENDING` | Reservado en wallet, esperando confirmación del rail |
+| `AWAITING_APPROVAL` | Multi-sig activo (threshold≥2), espera firmas |
+| `EXECUTING` | En ejecución (multi-sig quorum alcanzado) |
+| `COMPLETED` | Confirmado, irreversible |
+| `FAILED` | Falló, fondos devueltos al wallet |
+| `EXPIRED` | TTL 24h agotado sin quorum (multi-sig) |
+
+Pollea el estado vía `GET /wallets/transactions/:id` o esperá webhooks salientes (próximamente).
+
+## Idempotencia
+
+El campo `reference` actúa como idempotency key dentro de 60s. Reenviá la misma request con el mismo reference para safely retry tras 5xx.
+
+## Defensa SARLAFT
+
+- `targetDocument` es **obligatorio** para BREB (no se persiste null en la transacción)
+- Mouv valida el documento del cliente contra blacklist AML antes de dispatchar
+- Counterparty limits (tope diario/mensual por tercero) se verifican antes del send
+- Transactions quedan persistidas con `apiKeyId` para audit trail

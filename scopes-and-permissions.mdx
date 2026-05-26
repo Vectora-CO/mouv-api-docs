@@ -1,0 +1,88 @@
+---
+title: Scopes y permisos
+description: READ vs WRITE — qué puede hacer cada tipo de API key
+---
+
+## Scopes
+
+Cada API key se genera con uno de dos scopes:
+
+| Scope | Acceso | Cuándo usar |
+|---|---|---|
+| `READ` | Solo lectura | Sistemas de reporting, observabilidad, BI |
+| `WRITE` | Lectura + operaciones financieras | Servicios que disparan retiros/recaudos |
+
+`WRITE` es un superset de `READ`: cualquier endpoint que acepta `READ` también acepta `WRITE`.
+
+## Tabla de permisos por endpoint
+
+| Endpoint | READ | WRITE |
+|---|:---:|:---:|
+| `GET /wallets/balance` | ✅ | ✅ |
+| `GET /wallets/transactions` | ✅ | ✅ |
+| `GET /wallets/transactions/:id` | ✅ | ✅ |
+| `GET /wallets/transactions/:id/receipt.pdf` | ✅ | ✅ |
+| `GET /deposits` | ✅ | ✅ |
+| `GET /wallets/deposits/:id/receipt.pdf` | ✅ | ✅ |
+| `POST /transfers/resolve-key` | ❌ | ✅ |
+| `POST /transfers/quote` | ❌ | ✅ |
+| `POST /transfers/quote/ach` | ❌ | ✅ |
+| `POST /transfers/send` | ❌ | ✅ |
+| `POST /deposits/pse` | ❌ | ✅ |
+| `POST /deposits/:id/share-email` | ❌ | ✅ |
+
+## Respuestas de scope insuficiente
+
+Si una llave `READ` intenta una operación `WRITE`:
+
+```http
+HTTP/1.1 403 Forbidden
+Content-Type: application/json
+
+{
+  "error": "INSUFFICIENT_SCOPE",
+  "required": "WRITE",
+  "granted": "READ",
+  "message": "Esta operación requiere una API key con permiso WRITE"
+}
+```
+
+## Multi-tenant scope (automático)
+
+Tu API key está bound a UNA cuenta empresarial. **Todos los endpoints filtran por tu `companyId` automáticamente** — no podés ver ni operar datos de otras cuentas.
+
+Endpoints administrativos globales (`/admin/*`) usan un middleware de autenticación diferente y **rechazan API keys cliente**. Esto es defense-in-depth contra privilege escalation.
+
+## Multi-sig (firma múltiple)
+
+Si tu empresa configuró `multiSigThreshold >= 2`, las transferencias salientes vía `POST /transfers/send` no se dispatchan inmediatamente:
+
+```json
+{
+  "status": "AWAITING_APPROVAL",
+  "approvalId": "appr_...",
+  "threshold": 2,
+  "expiresAt": "2026-05-26T20:00:00.000Z"
+}
+```
+
+La transacción espera firmas (ADMIN/OPERATOR roles via dashboard) hasta alcanzar el quorum. TTL 24h — si no se firma, expira y revierte automáticamente.
+
+API keys NO pueden firmar approvals (defense-in-depth — un actor humano siempre debe verificar). Las firmas se hacen desde el dashboard cliente o admin.
+
+## Buenas prácticas
+
+<CardGroup cols={2}>
+  <Card title="Mínimo privilegio">
+    Generá llaves READ separadas para reporting/observabilidad. Solo usá WRITE en servicios que estrictamente disparan movimientos.
+  </Card>
+  <Card title="Múltiples llaves por entorno">
+    `production-server` · `staging` · `local-dev` · `reporting-bi`. Cada una con su label y su scope mínimo necesario.
+  </Card>
+  <Card title="Rotá cada 90 días">
+    Cero downtime: generá nueva → switch → revocá vieja.
+  </Card>
+  <Card title="Audit por llave">
+    El campo `apiKeyId` queda persistido en cada Transaction — podés filtrar el historial por llave para forensics.
+  </Card>
+</CardGroup>

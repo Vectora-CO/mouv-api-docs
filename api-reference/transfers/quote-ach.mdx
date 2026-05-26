@@ -1,0 +1,70 @@
+---
+title: POST /transfers/quote/ach
+description: Cotizar transferencia ACH sin comprometer fondos
+api: 'POST https://consola.mouvlatam.com/api/transfers/quote/ach'
+---
+
+Calcula comisión, IVA y total a debitar de tu wallet ACH para una transferencia bancaria.
+
+**Scope requerido**: `WRITE`
+
+## Body
+
+<ParamField body="amount" type="number" required>
+  Monto BRUTO en centavos. Mínimo 100 (= $1 COP), máximo cap individual ACH ($2.000M COP = 200_000_000_000 centavos).
+</ParamField>
+
+## Response 200
+
+Mismo shape que [`/transfers/quote` BREB](/api-reference/transfers/quote-breb). La diferencia es que el fee se calcula con la FeeConfig `ACH_OUTFLOW` y el `currentBalance` es el del wallet ACH (no BREB).
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/transfers/quote/ach \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "amount": 5000000 }'
+```
+
+```javascript Node.js
+const quote = await fetch('https://consola.mouvlatam.com/api/transfers/quote/ach', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ amount: 5000000 }),
+}).then(r => r.json());
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "amount": 5000000,
+  "currentBalance": 138305296,
+  "feeBreakdown": {
+    "fixedFee": 1100,
+    "variableFee": 5000,
+    "subtotalFee": 6100,
+    "ivaApplicable": true,
+    "ivaAmount": 1159,
+    "totalCharged": 7259
+  },
+  "totalCost": 5007259,
+  "canAfford": true,
+  "message": null
+}
+```
+
+</ResponseExample>
+
+## Notas
+
+- ACH cap individual: **$2.000M COP** por transferencia
+- Quote NO valida la cuenta destino — eso pasa en `/transfers/send`. El propósito del quote es solo el preview de costo

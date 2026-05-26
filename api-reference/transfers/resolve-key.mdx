@@ -1,0 +1,130 @@
+---
+title: POST /transfers/resolve-key
+description: Verificar llave Bre-B contra el directorio del Banco de la República
+api: 'POST https://consola.mouvlatam.com/api/transfers/resolve-key'
+---
+
+Verifica una llave Bre-B (celular, correo, alias, o cédula) contra el directorio oficial del Banco de la República y retorna el titular registrado.
+
+**Scope requerido**: `WRITE` (expone identidad del titular — no apto para llaves READ)
+
+## Body
+
+<ParamField body="keyValue" type="string" required>
+  La llave a verificar. Aceptamos los 4 formatos Bre-B:
+  - **Celular**: 10 dígitos comenzando con `3` (ej. `3115551234`)
+  - **Correo**: formato email válido (ej. `pagos@empresa.com`)
+  - **Alias**: 3-40 chars alfanuméricos, opcional `@` prefix (ej. `@empresaxyz`)
+  - **Documento**: cédula CC o NIT, 5-15 dígitos (ej. `900123456`)
+
+  Length: 3-64 chars.
+</ParamField>
+
+<ParamField body="keyType" type="string" default="AUTO">
+  Opcional. Si lo omitís (recomendado), Mouv usa `AUTO` y la red Bre-B detecta el tipo automáticamente. Valores válidos: `PHONE`, `EMAIL`, `ALPHANUM`, `NRIC`, `AUTO`.
+</ParamField>
+
+## Response 200 (llave encontrada y activa)
+
+<ResponseField name="found" type="boolean">`true`</ResponseField>
+<ResponseField name="anchorHandle" type="string">Identificador interno Bre-B (úsalo si quisieras llamar el send directamente con `targetAnchorHandle`)</ResponseField>
+<ResponseField name="keyType" type="string">Tipo real detectado por Bre-B: `PHONE`, `EMAIL`, `ALPHANUM`, o `NRIC`</ResponseField>
+<ResponseField name="keyValue" type="string">El valor de la llave (normalizado por Bre-B si aplica)</ResponseField>
+<ResponseField name="recipient" type="object">
+  Información del titular (proviene del directorio Bre-B)
+  <Expandable title="Schema">
+    <ResponseField name="firstName" type="string">Nombres del titular (en mayúsculas, Bre-B convention)</ResponseField>
+    <ResponseField name="lastName" type="string">Apellidos del titular</ResponseField>
+    <ResponseField name="fullName" type="string">`firstName + " " + lastName`</ResponseField>
+    <ResponseField name="bankName" type="string">Nombre del banco asociado a la llave</ResponseField>
+    <ResponseField name="bankAccountType" type="string">`"Ahorros"` o `"Corriente"`</ResponseField>
+    <ResponseField name="status" type="string">`"active"` (las inactivas retornan 422)</ResponseField>
+    <ResponseField name="idType" type="string">`"CC"`, `"CE"`, o `"NIT"`</ResponseField>
+    <ResponseField name="idValue" type="string">Número de documento del titular. **Usalo como `targetDocument` en `/transfers/send`** (SARLAFT compliance)</ResponseField>
+  </Expandable>
+</ResponseField>
+
+## Response 422 (llave no encontrada o inactiva)
+
+```json
+{
+  "found": false,
+  "error": "No se encontró una cuenta Breb activa para la llave proporcionada"
+}
+```
+
+## Ejemplos
+
+<RequestExample>
+
+```bash curl
+curl -X POST https://consola.mouvlatam.com/api/transfers/resolve-key \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{ "keyValue": "3115551234" }'
+```
+
+```javascript Node.js
+const res = await fetch('https://consola.mouvlatam.com/api/transfers/resolve-key', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${process.env.MOUV_API_KEY}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ keyValue: '3115551234' }),
+});
+const { recipient } = await res.json();
+console.log(`Pagar a: ${recipient.fullName} (${recipient.idValue}) - ${recipient.bankName}`);
+```
+
+```python Python
+res = requests.post(
+    'https://consola.mouvlatam.com/api/transfers/resolve-key',
+    headers={
+        'Authorization': f'Bearer {os.environ["MOUV_API_KEY"]}',
+        'Content-Type': 'application/json',
+    },
+    json={'keyValue': '3115551234'},
+)
+recipient = res.json()['recipient']
+print(f"Titular: {recipient['fullName']}, doc: {recipient['idValue']}")
+```
+
+</RequestExample>
+
+<ResponseExample>
+
+```json 200 OK
+{
+  "found": true,
+  "anchorHandle": "tel:573115551234@breb",
+  "keyType": "PHONE",
+  "keyValue": "3115551234",
+  "recipient": {
+    "firstName": "JUAN",
+    "lastName": "PEREZ",
+    "fullName": "JUAN PEREZ",
+    "bankName": "Banco Bancolombia",
+    "bankAccountType": "Ahorros",
+    "status": "active",
+    "idType": "CC",
+    "idValue": "1018485810"
+  }
+}
+```
+
+```json 422 No encontrada
+{
+  "found": false,
+  "error": "No se encontró una cuenta Breb activa para la llave proporcionada"
+}
+```
+
+</ResponseExample>
+
+## Notas
+
+- **No comprometés fondos**: este endpoint es consulta pura, no genera transacciones
+- **Auto-detect**: el `keyType` retornado proviene de Bre-B oficial — siempre confiable
+- **SARLAFT**: el `recipient.idValue` es el documento del titular registrado. Persistilo como `targetDocument` al enviar
+- **Cache**: NO cacheés este response — la llave puede desactivarse en cualquier momento
