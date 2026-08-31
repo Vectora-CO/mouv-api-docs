@@ -26,18 +26,20 @@
     }
   },
   "navigation": {
-    "anchors": [
-      {
-        "anchor": "Estado del sistema",
-        "icon": "signal-stream",
-        "href": "https://consola.mouvlatam.com/api/health"
-      },
-      {
-        "anchor": "Soporte",
-        "icon": "envelope",
-        "href": "mailto:hola@vectora.com.co"
-      }
-    ],
+    "global": {
+      "anchors": [
+        {
+          "anchor": "Estado del sistema",
+          "icon": "signal-stream",
+          "href": "https://consola.mouvlatam.com/api/health"
+        },
+        {
+          "anchor": "Soporte",
+          "icon": "envelope",
+          "href": "mailto:hola@vectora.com.co"
+        }
+      ]
+    },
     "groups": [
       {
         "group": "Comenzar",
