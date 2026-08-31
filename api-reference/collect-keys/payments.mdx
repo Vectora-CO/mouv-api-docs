@@ -1,0 +1,63 @@
+---
+title: GET /deposits (recaudos Bre-B por cliente)
+description: Conciliar los pagos Bre-B de cada cliente tuyo
+api: 'GET https://consola.mouvlatam.com/api/deposits'
+---
+
+El listado de depósitos, filtrado a los recaudos **Bre-B** y — para agregadores — **por cliente tuyo**. Cada pago trae la llave que lo recibió con tu `externalId`: la conciliación es un join directo contra tu sistema. **Scope**: `READ`.
+
+## Query params (los relevantes para agregadores)
+
+| Param | Tipo | Significado |
+|---|---|---|
+| `rail` | string | `BREB` — solo recaudos Bre-B |
+| `externalId` | string | Solo los pagos a las llaves de ESE cliente tuyo |
+| `brebKeyId` | string | Alternativa: filtrar por el id de una llave puntual |
+| `limit` | number | Default 20, máximo 100 |
+| `page` | number | Paginación por página (0-based) |
+
+## Response 200
+
+```json
+{
+  "deposits": [
+    {
+      "id": "dep_...",
+      "amountCents": "1000000",
+      "feeAmountCents": "11000",
+      "ivaAmountCents": "2090",
+      "netAmountCents": "986910",
+      "currency": "COP",
+      "status": "ASSIGNED",
+      "source": "BREB",
+      "brebKey": {
+        "id": "bkey_9f2c1a7e-...",
+        "externalId": "cust_84213",
+        "name": "Panadería La Espiga",
+        "value": "@PANADERIALAESPIG3456"
+      },
+      "payerName": "JUAN PEREZ",
+      "payerDocument": "CC 1018485810",
+      "payerBank": "BANCOLOMBIA S.A.",
+      "providerTransferId": "8e39f393-...",
+      "providerConfirmedAt": "2026-09-02T16:11:03.000Z",
+      "createdAt": "2026-09-02T16:11:04.000Z"
+    }
+  ],
+  "pagination": { "total": 42, "page": 0, "limit": 20, "totalPages": 3 }
+}
+```
+
+- `brebKey` es `null` en depósitos que no entraron por una llave (por ejemplo PSE).
+- `status`: `ASSIGNED` = acreditado a tu saldo. Otros valores posibles: `UNASSIGNED`, `REVERSED`, `PENDING_CONFIRM`, `EXPIRED`.
+- Los montos van como **string en centavos** (precisión exacta).
+
+<RequestExample>
+
+```bash curl
+# Los recaudos Bre-B de tu cliente cust_84213
+curl "https://consola.mouvlatam.com/api/deposits?rail=BREB&externalId=cust_84213&limit=100" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

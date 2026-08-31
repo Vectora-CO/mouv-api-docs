@@ -1,0 +1,34 @@
+---
+title: DELETE /breb/collect-keys/{id}
+description: Dar de baja la llave de un cliente
+api: 'DELETE https://consola.mouvlatam.com/api/breb/collect-keys/{id}'
+---
+
+Da de baja la llave de un cliente tuyo: deja de recibir pagos de inmediato. **Scope**: `WRITE`. Operación **idempotente** (repetirla devuelve `200` con el mismo estado).
+
+El histórico de recaudos de la llave sigue disponible en [`GET /deposits`](/api-reference/collect-keys/payments).
+
+## Response 200
+
+```json
+{
+  "id": "bkey_9f2c1a7e-...",
+  "externalId": "cust_84213",
+  "name": "Panadería La Espiga",
+  "key": { "type": "ALPHANUM", "value": "@PANADERIALAESPIG3456" },
+  "state": "DELETED",
+  "createdAt": "2026-09-01T14:22:10.000Z",
+  "deletedAt": "2026-09-15T09:03:44.000Z"
+}
+```
+
+`404 KEY_NOT_FOUND` si no existe o no es de tu empresa. Para volver a darle una llave al mismo cliente, emití una nueva con el mismo `externalId` (`POST /breb/collect-keys`).
+
+<RequestExample>
+
+```bash curl
+curl -X DELETE "https://consola.mouvlatam.com/api/breb/collect-keys/bkey_9f2c1a7e-..." \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

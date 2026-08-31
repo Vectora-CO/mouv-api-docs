@@ -18,8 +18,8 @@ Calcula comisión, IVA y total a debitar de tu wallet BREB para una transferenci
   Llave Bre-B destino (idéntico shape al de `/resolve-key`).
 </ParamField>
 
-<ParamField body="keyType" type="string" default="AUTO">
-  Opcional. Default `AUTO` — Mouv infiere.
+<ParamField body="keyType" type="string" required>
+  `PHONE`, `EMAIL`, `ALPHANUM` o `NRIC`. Usá el `keyType` que retornó [`/transfers/resolve-key`](/api-reference/transfers/resolve-key).
 </ParamField>
 
 ## Response 200
@@ -48,7 +48,7 @@ Calcula comisión, IVA y total a debitar de tu wallet BREB para una transferenci
 curl -X POST https://consola.mouvlatam.com/api/transfers/quote \
   -H "Authorization: Bearer mvk_..." \
   -H "Content-Type: application/json" \
-  -d '{ "amount": 100000, "keyValue": "3115551234" }'
+  -d '{ "amount": 100000, "keyType": "PHONE", "keyValue": "3115551234" }'
 ```
 
 ```javascript Node.js

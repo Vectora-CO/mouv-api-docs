@@ -1,0 +1,46 @@
+---
+title: GET /breb/collect-keys
+description: Listar las llaves Bre-B de tus clientes
+api: 'GET https://consola.mouvlatam.com/api/breb/collect-keys'
+---
+
+Lista las llaves de tus clientes con paginación por cursor (soporta miles de llaves). **Scope**: `READ`.
+
+## Query params
+
+| Param | Tipo | Default | Significado |
+|---|---|---|---|
+| `limit` | number | 100 | Máximo 200 |
+| `cursor` | string | — | El `nextCursor` del response anterior |
+| `state` | string | (todas) | `ACTIVE` · `SUSPENDED` · `DELETED` |
+| `externalId` | string | — | Solo las llaves de ese cliente tuyo |
+
+## Response 200
+
+```json
+{
+  "items": [
+    {
+      "id": "bkey_9f2c1a7e-...",
+      "externalId": "cust_84213",
+      "name": "Panadería La Espiga",
+      "key": { "type": "ALPHANUM", "value": "@PANADERIALAESPIG3456" },
+      "state": "ACTIVE",
+      "createdAt": "2026-09-01T14:22:10.000Z",
+      "deletedAt": null
+    }
+  ],
+  "nextCursor": "bkey_77a1..."
+}
+```
+
+`nextCursor: null` cuando no hay más páginas.
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/breb/collect-keys?limit=100&state=ACTIVE" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

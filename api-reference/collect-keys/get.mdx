@@ -1,0 +1,38 @@
+---
+title: GET /breb/collect-keys/{id}
+description: Detalle de una llave (por id o por tu externalId)
+api: 'GET https://consola.mouvlatam.com/api/breb/collect-keys/{id}'
+---
+
+Detalle de una llave de tus clientes. **Scope**: `READ`.
+
+## Path
+
+<ParamField path="id" type="string" required>
+  El `id` de la llave (`bkey_...`) **o** tu identificador con el prefijo `ext:` — por ejemplo `ext:cust_84213` busca por tu `externalId`.
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "id": "bkey_9f2c1a7e-...",
+  "externalId": "cust_84213",
+  "name": "Panadería La Espiga",
+  "key": { "type": "ALPHANUM", "value": "@PANADERIALAESPIG3456" },
+  "state": "ACTIVE",
+  "createdAt": "2026-09-01T14:22:10.000Z",
+  "deletedAt": null
+}
+```
+
+`404 KEY_NOT_FOUND` si la llave no existe o no pertenece a tu empresa.
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/breb/collect-keys/ext:cust_84213" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

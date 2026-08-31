@@ -1,0 +1,70 @@
+---
+title: Agregadores — recaudo Bre-B para tus clientes
+description: Emití llaves Bre-B para cada uno de tus clientes y conciliá cada pago automáticamente
+---
+
+Si tu empresa es un **agregador de pagos** (le cobrás a los clientes de tus clientes), Mouv te permite emitir **una llave Bre-B por cada cliente tuyo** — con el nombre de tu cliente — y saber exactamente **a quién le pagaron** en cada recaudo. Sin límite de llaves: si tenés 1.000 clientes, emitís 1.000 llaves.
+
+<Note>
+Esta sección requiere que Mouv habilite el modo agregador para tu empresa. Escribinos a [hola@vectora.com.co](mailto:hola@vectora.com.co) para activarlo. Sin la activación, los endpoints responden `403 AGGREGATOR_NOT_ENABLED`.
+</Note>
+
+## Cómo funciona
+
+1. **Emitís una llave por cliente** con `POST /breb/collect-keys`, mandando el **nombre** de tu cliente y tu **`externalId`** (el ID de ese cliente en TU sistema). Mouv deriva la llave del nombre — por ejemplo `Panadería La Espiga` → `@PANADERIALAESPIG3456` — vos nunca inventás el valor.
+2. **Tu cliente cobra** compartiendo su llave o su código QR (`POST /breb/collect-keys/{id}/qr`). Cualquier persona le paga desde su app bancaria por Bre-B.
+3. **El dinero se acredita a TU saldo** en Mouv (vos sos nuestro cliente; tus clientes son tuyos). Cada pago queda marcado con la llave que lo recibió.
+4. **Conciliás por polling** con `GET /deposits?rail=BREB&externalId=...`: cada depósito trae el objeto `brebKey` con tu `externalId` — sabés a qué cliente tuyo pertenece cada peso, con nombre, documento y banco del pagador.
+
+## Idempotencia (importante)
+
+`POST /breb/collect-keys` es **idempotente por `externalId`**: si reintentás con el mismo `externalId` (timeout, reintento de tu job, doble click), recibís `200` con la llave ya existente — jamás se crea una segunda llave para el mismo cliente. Diseñá tu integración para reintentar con confianza.
+
+## Loop de alta masiva (ejemplo: 1.000 clientes)
+
+```bash
+# Pseudocódigo — un create por cliente, reintentable
+for cliente in $(cat clientes.csv); do
+  curl -X POST "https://consola.mouvlatam.com/api/breb/collect-keys" \
+    -H "Authorization: Bearer mvk_..." \
+    -H "Content-Type: application/json" \
+    -d "{\"externalId\": \"$id\", \"name\": \"$nombre\", \"document\": \"$nit\"}"
+done
+```
+
+- Límite de creación: **30 llaves por minuto** (el resto de tu lote espera y reintenta — el `externalId` idempotente hace el reintento gratis). 1.000 llaves ≈ 35 minutos.
+- Si un nombre colisiona en la red nacional Bre-B, Mouv intenta automáticamente hasta 3 variantes; si todas están tomadas recibís `409 KEY_TAKEN` con las variantes intentadas — cambiá levemente el nombre y reintentá.
+
+## Conciliación por polling
+
+```bash
+# Todos los recaudos Bre-B de tu cliente cust_84213
+curl "https://consola.mouvlatam.com/api/deposits?rail=BREB&externalId=cust_84213&limit=100" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+Cada item incluye:
+
+```json
+{
+  "id": "dep_...",
+  "amountCents": "1000000",
+  "netAmountCents": "986910",
+  "brebKey": { "id": "bkey_...", "externalId": "cust_84213", "name": "Panadería La Espiga", "value": "@PANADERIALAESPIG3456" },
+  "payerName": "JUAN PEREZ",
+  "payerDocument": "CC 1018485810",
+  "payerBank": "BANCOLOMBIA S.A."
+}
+```
+
+<Tip>
+Corré el polling cada 1–5 minutos con `?limit=100` y quedate con los `id` ya procesados. Los pagos Bre-B se acreditan en segundos, así que un polling corto da una experiencia casi en tiempo real.
+</Tip>
+
+## Qué ve la persona que paga
+
+El titular registrado de la cuenta en la red Bre-B es Vectora (la entidad regulada detrás de Mouv). La **llave** es lo que identifica a tu cliente — por eso lleva su nombre. Contale a tus clientes que compartan la llave o el QR con el nombre, y que el pagador puede verificarla antes de enviar.
+
+## Baja de un cliente
+
+`DELETE /breb/collect-keys/{id}` desactiva la llave (la llave deja de recibir pagos). La operación es idempotente y el histórico de recaudos de esa llave sigue disponible en `GET /deposits`.

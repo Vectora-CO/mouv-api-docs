@@ -140,3 +140,15 @@ curl -X POST https://consola.mouvlatam.com/api/transfers/send \
 Si la primera request 5xx-falló y reintentas con el mismo `reference`, Mouv resuelve el conflicto:
 - Si la operación original SÍ se dispatchó upstream → response original
 - Si NO se dispatchó → procesa la nueva request normalmente
+
+## Errores del modo agregador (recaudo Bre-B)
+
+| HTTP | Código | Significado |
+|---|---|---|
+| 403 | `AGGREGATOR_NOT_ENABLED` | El modo agregador no está habilitado para tu empresa — escribinos para activarlo |
+| 400 | `NAME_NOT_DERIVABLE` | El nombre del cliente no alcanza para derivar una llave (mínimo 3 caracteres alfanuméricos) |
+| 409 | `KEY_TAKEN` | La llave colisiona en la red nacional tras 3 variantes automáticas — el body trae `attempted[]`; probá con otro nombre |
+| 409 | `ACCOUNT_NOT_READY` | Tu cuenta de recaudo Bre-B aún no está lista — contactá a soporte |
+| 409 | `KEY_TYPE_NOT_AVAILABLE` | Ese tipo de llave no está disponible por ahora |
+| 404 | `KEY_NOT_FOUND` | La llave no existe o no pertenece a tu empresa |
+| 429 | `RATE_LIMIT_EXCEEDED` | Límite de creación de llaves por minuto — esperá y reintentá (el mismo `externalId` es idempotente) |

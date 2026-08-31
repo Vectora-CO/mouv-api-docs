@@ -1,0 +1,71 @@
+---
+title: POST /breb/collect-keys
+description: Emitir una llave Bre-B para un cliente tuyo
+api: 'POST https://consola.mouvlatam.com/api/breb/collect-keys'
+---
+
+Emite una llave Bre-B a nombre de un cliente tuyo. Mouv **deriva la llave del nombre** (vos nunca mandás el valor de la llave): `Panadería La Espiga` + documento `...3456` → `@PANADERIALAESPIG3456`.
+
+**Scope requerido**: `WRITE` · **Requiere**: modo agregador habilitado para tu empresa.
+
+**Idempotente por `externalId`**: reintentar con el mismo `externalId` devuelve `200` con la llave existente — jamás crea una segunda.
+
+**Rate limit**: 30 creaciones por minuto por empresa (el reintento del mismo `externalId` no crea nada y es seguro).
+
+## Body
+
+<ParamField body="externalId" type="string" required>
+  El ID de tu cliente en TU sistema (1–64 chars, `[A-Za-z0-9._:-]`). Es la clave de idempotencia y el campo con el que después filtrás los recaudos.
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Nombre de tu cliente (3–80 chars). De acá se deriva la llave: se normaliza (mayúsculas, sin tildes, sin sufijos societarios como SAS/LTDA) y se le agrega un sufijo de unicidad.
+</ParamField>
+
+<ParamField body="document" type="string">
+  Documento de tu cliente (NIT/CC, 4–20 dígitos). Recomendado: sus últimos 4 dígitos se usan como sufijo de la llave (más reconocible que un sufijo aleatorio) y queda registrado para conciliación.
+</ParamField>
+
+## Response 201 (creada) · 200 (ya existía — idempotente)
+
+```json
+{
+  "id": "bkey_9f2c1a7e-4c31-4b7e-9d21-8f3a2b1c0d4e",
+  "externalId": "cust_84213",
+  "name": "Panadería La Espiga",
+  "key": { "type": "ALPHANUM", "value": "@PANADERIALAESPIG3456" },
+  "state": "ACTIVE",
+  "createdAt": "2026-09-01T14:22:10.000Z",
+  "deletedAt": null
+}
+```
+
+En el caso `200`, el body incluye además `"idempotent": true`.
+
+## Errores
+
+| HTTP | `error` | Cuándo |
+|---|---|---|
+| 400 | `NAME_NOT_DERIVABLE` | El nombre no tiene al menos 3 caracteres alfanuméricos utilizables |
+| 400 | `VALIDATION_ERROR` | `externalId`/`name`/`document` no cumplen el formato |
+| 403 | `AGGREGATOR_NOT_ENABLED` | Tu empresa no tiene el modo agregador activo |
+| 403 | `INSUFFICIENT_SCOPE` | La API key es `READ` |
+| 409 | `KEY_TAKEN` | El nombre colisiona en la red incluso tras 3 variantes automáticas — el body trae `attempted[]` con lo intentado; probá con otro nombre |
+| 409 | `ACCOUNT_NOT_READY` | Tu cuenta de recaudo Bre-B aún no está lista — contactá a soporte |
+| 429 | `RATE_LIMIT_EXCEEDED` | Más de 30 creaciones/minuto — esperá y reintentá (idempotente) |
+| 502 | `PROVIDER_ERROR` | Error transitorio de la red — reintentá con el mismo `externalId` |
+
+<RequestExample>
+
+```bash curl
+curl -X POST "https://consola.mouvlatam.com/api/breb/collect-keys" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "externalId": "cust_84213",
+    "name": "Panadería La Espiga",
+    "document": "900123456"
+  }'
+```
+
+</RequestExample>

@@ -10,32 +10,36 @@ Lista tus recaudos PSE con paginación cursor-based. **Scope**: `READ`.
 
 | Param | Tipo | Default | Significado |
 |---|---|---|---|
-| `status` | string | (all) | Filtra por status: `PENDING_CONFIRM`, `PAID`, `FAILED`, `EXPIRED` |
-| `cursor` | string | (none) | Cursor de paginación (del response anterior) |
+| `status` | string | (all) | Filtra por status: `PENDING_CONFIRM`, `ASSIGNED`, `UNASSIGNED`, `REVERSED`, `EXPIRED` |
+| `rail` | string | (todos) | `BREB` = solo recaudos Bre-B · `PSE` = solo PSE |
+| `externalId` | string | — | (agregadores) pagos a las llaves de ese cliente tuyo |
+| `brebKeyId` | string | — | (agregadores) pagos a una llave puntual |
+| `page` | number | 0 | Paginación por página (0-based) |
 | `limit` | number | 20 | Máximo 100 |
 
 ## Response 200
 
-<ResponseField name="items" type="array">
+<ResponseField name="deposits" type="array">
   <Expandable title="Schema de deposit">
     <ResponseField name="id" type="string">`dep_...`</ResponseField>
-    <ResponseField name="status" type="string">`PENDING_CONFIRM` / `PAID` / `FAILED` / `EXPIRED`</ResponseField>
-    <ResponseField name="amountCents" type="number">Monto bruto cotizado</ResponseField>
-    <ResponseField name="feeAmountCents" type="number">Comisión cobrada (solo si `PAID`)</ResponseField>
-    <ResponseField name="ivaAmountCents" type="number">IVA cobrado (solo si `PAID`)</ResponseField>
-    <ResponseField name="netCreditedCents" type="number">Lo que se acreditó a tu wallet (solo si `PAID`)</ResponseField>
-    <ResponseField name="payerFirstName" type="string">Pagador</ResponseField>
-    <ResponseField name="payerLastName" type="string">Pagador</ResponseField>
-    <ResponseField name="payerDocument" type="string">Documento pagador</ResponseField>
-    <ResponseField name="payerEmail" type="string">Email pagador</ResponseField>
-    <ResponseField name="internalRef" type="string | null">Tu reference (si lo proveíste)</ResponseField>
-    <ResponseField name="paidAt" type="string | null">Cuándo se confirmó el pago</ResponseField>
-    <ResponseField name="createdAt" type="string">Cuándo se generó el link</ResponseField>
+    <ResponseField name="status" type="string">`PENDING_CONFIRM` / `ASSIGNED` (acreditado) / `UNASSIGNED` / `REVERSED` / `EXPIRED`</ResponseField>
+    <ResponseField name="amountCents" type="string">Monto bruto en centavos (string — precisión exacta)</ResponseField>
+    <ResponseField name="feeAmountCents" type="string">Comisión cobrada</ResponseField>
+    <ResponseField name="ivaAmountCents" type="string">IVA cobrado</ResponseField>
+    <ResponseField name="netAmountCents" type="string">Lo que se acreditó a tu wallet</ResponseField>
+    <ResponseField name="source" type="string">Canal público: `PSE` / `BREB` / `ACH` / `DEPOSIT`</ResponseField>
+    <ResponseField name="brebKey" type="object | null">(agregadores) La llave que recibió el pago: `{ id, externalId, name, value }`. `null` si no entró por llave</ResponseField>
+    <ResponseField name="payerName" type="string | null">Nombre del pagador</ResponseField>
+    <ResponseField name="payerDocument" type="string | null">Documento del pagador</ResponseField>
+    <ResponseField name="payerBank" type="string | null">Banco de origen del pago</ResponseField>
+    <ResponseField name="payerEmail" type="string | null">Email del pagador (PSE)</ResponseField>
+    <ResponseField name="providerConfirmedAt" type="string | null">Cuándo se confirmó el pago</ResponseField>
+    <ResponseField name="createdAt" type="string">Cuándo se registró</ResponseField>
   </Expandable>
 </ResponseField>
 
-<ResponseField name="nextCursor" type="string | null">
-  Si hay más resultados, cursor para la siguiente página. `null` cuando no hay más.
+<ResponseField name="pagination" type="object">
+  `{ total, page, limit, totalPages }` — paginación por página (0-based).
 </ResponseField>
 
 ## Ejemplos

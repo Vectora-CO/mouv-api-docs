@@ -1,0 +1,49 @@
+---
+title: POST /breb/collect-keys/{id}/qr
+description: Código QR de cobro para la llave de un cliente
+api: 'POST https://consola.mouvlatam.com/api/breb/collect-keys/{id}/qr'
+---
+
+Emite (o reusa) el **QR estático** de cobro de la llave de un cliente tuyo — el que él imprime o muestra en caja para que le paguen escaneando. Un QR vivo por llave: repetir la llamada devuelve el mismo (`reused: true`). **Scope**: `WRITE`.
+
+## Response 201 (nuevo) · 200 (reusado)
+
+```json
+{
+  "qr": {
+    "id": "qr_5c3e...",
+    "type": "STATIC",
+    "reference": "06345891",
+    "isPaid": false,
+    "createdAt": "2026-09-01T14:25:00.000Z"
+  },
+  "reused": false
+}
+```
+
+## La imagen del QR
+
+`GET /breb/collect-keys/qr/{qrId}.png` — devuelve el PNG listo para imprimir/mostrar. **Scope**: `READ`.
+
+```bash
+curl "https://consola.mouvlatam.com/api/breb/collect-keys/qr/qr_5c3e....png" \
+  -H "Authorization: Bearer mvk_..." \
+  --output qr-espiga.png
+```
+
+## Errores
+
+| HTTP | `error` | Cuándo |
+|---|---|---|
+| 404 | `KEY_NOT_FOUND` | La llave no existe o no es de tu empresa |
+| 409 | `KEY_NOT_ACTIVE` | La llave está suspendida o dada de baja |
+| 404 | `QR_NOT_FOUND` | (en el .png) el QR no existe o no es tuyo |
+
+<RequestExample>
+
+```bash curl
+curl -X POST "https://consola.mouvlatam.com/api/breb/collect-keys/bkey_9f2c1a7e-.../qr" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

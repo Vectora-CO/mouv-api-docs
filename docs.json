@@ -72,6 +72,18 @@
         ]
       },
       {
+        "group": "Recaudos Bre-B (agregadores)",
+        "pages": [
+          "guides/aggregators",
+          "api-reference/collect-keys/create",
+          "api-reference/collect-keys/list",
+          "api-reference/collect-keys/get",
+          "api-reference/collect-keys/delete",
+          "api-reference/collect-keys/qr",
+          "api-reference/collect-keys/payments"
+        ]
+      },
+      {
         "group": "Transacciones",
         "pages": [
           "api-reference/transactions/list",
