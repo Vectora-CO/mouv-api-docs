@@ -1,0 +1,60 @@
+---
+title: DELETE /swaps/wallets/:walletId
+description: Eliminar una billetera de tu empresa por API (requiere habilitación)
+api: 'DELETE https://consola.mouvlatam.com/api/swaps/wallets/{walletId}'
+---
+
+Da de baja una billetera de tu empresa. La baja es **idempotente**: repetirla no falla.
+
+**Scope requerido**: `SWAP` con el permiso **Gestionar billeteras**. Mismas condiciones que [`POST /swaps/wallets`](/api-reference/swaps/create-wallet): gestión por API habilitada por Mouv para tu empresa, e IPs autorizadas en la llave. No requiere `Idempotency-Key`.
+
+## Path
+
+<ParamField path="walletId" type="string" required>
+  `id` de la billetera (ver [`GET /swaps/wallets`](/api-reference/swaps/list-wallets)).
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "id": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+  "removed": true
+}
+```
+
+Si la billetera ya estaba eliminada (por ti o por Mouv), responde `200` con `alreadyRemoved`:
+
+```json
+{
+  "id": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+  "removed": true,
+  "alreadyRemoved": true
+}
+```
+
+<Note>
+Las operaciones ya aceptadas **no se ven afectadas**: la dirección de entrega queda fijada al aceptar. Una billetera eliminada deja de aceptar cotizaciones nuevas y libera un cupo de las 20 vigentes. No libera el tope de 10 altas por API en 24 horas.
+</Note>
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no autorizada para la llave |
+| 403 | `WALLET_PERMISSION_REQUIRED` | La llave no tiene el permiso **Gestionar billeteras** |
+| 403 | `IP_ALLOWLIST_REQUIRED` | La llave no tiene IPs autorizadas |
+| 403 | `WALLET_API_NOT_ENABLED` | La gestión por API no está habilitada para tu empresa |
+| 404 | `WALLET_NOT_FOUND` | La billetera no existe o es de otra empresa |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl -X DELETE "https://consola.mouvlatam.com/api/swaps/wallets/5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

@@ -31,13 +31,13 @@ Indica si tu empresa puede usar la Conversión COP→USDT, qué redes tiene habi
 | `enabled` | boolean | `true` si tu empresa tiene el servicio activo y al menos una red habilitada |
 | `networks` | string[] | Redes habilitadas para tu empresa (`TRON`, `POLYGON`) |
 | `sides` | string[] | Operaciones disponibles. Hoy: `["BUY"]` (solo compra) |
-| `walletCooldownHours` | number | Horas de espera de una billetera nueva antes de poder operar. Por defecto `0` |
+| `walletCooldownHours` | number | Horas de espera de una billetera nueva antes de poder operar. Por defecto `0`. Si `canManageWallets` es `true`, es la espera que aplica a las billeteras registradas por tu llave (puede ser mayor) |
 | `walletHolder` | object | `fixed: true` indica que las billeteras deben estar a nombre de tu empresa; `name` es la razón social registrada |
 | `minUsdt` | string | Monto mínimo por operación, en USDT (decimal, hasta 6 decimales). Depende de la configuración de tu empresa |
 | `maxUsdt` | string | Monto máximo por operación, en USDT. Depende de la configuración de tu empresa |
 | `dailyLimitCop` | string | Tope diario de compras de tu empresa, en pesos (decimal con 2 decimales; día calendario de Colombia) |
 | `monthlyLimitCop` | string | Tope mensual de compras de tu empresa, en pesos (decimal con 2 decimales) |
-| `canManageWallets` | boolean | Con API key siempre `false`: las billeteras se administran solo desde el dashboard |
+| `canManageWallets` | boolean | `true` solo si **esta llave** puede registrar y eliminar billeteras por API: tiene el permiso **Gestionar billeteras**, tiene IPs autorizadas y Mouv habilitó la función para tu empresa. En cualquier otro caso `false` (las billeteras se administran desde el dashboard) |
 | `canOperate` | boolean | `true` si la credencial puede cotizar y aceptar |
 
 <Note>

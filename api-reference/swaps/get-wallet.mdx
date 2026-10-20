@@ -1,0 +1,71 @@
+---
+title: GET /swaps/wallets/:walletId
+description: Consultar una billetera de tu empresa y su estado
+api: 'GET https://consola.mouvlatam.com/api/swaps/wallets/{walletId}'
+---
+
+Devuelve una billetera de tu empresa, vigente o eliminada. Úsalo para seguir una billetera recién registrada hasta que quede `DISPONIBLE`.
+
+**Scope requerido**: `SWAP`. No requiere el permiso **Gestionar billeteras**.
+
+## Path
+
+<ParamField path="walletId" type="string" required>
+  `id` de la billetera.
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "wallet": {
+    "id": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+    "network": "TRON",
+    "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "label": "Tesorería",
+    "status": "DISPONIBLE",
+    "availableFrom": "2026-10-19T15:00:00.000Z",
+    "createdAt": "2026-10-19T15:00:00.000Z",
+    "origin": "API",
+    "apiKeyPrefix": "mvk_a1b2c3"
+  }
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | string | Identificador de la billetera (`walletId` al cotizar) |
+| `network` | string | Red de la billetera |
+| `address` | string | Dirección en forma canónica |
+| `label` | string \| null | Nombre asignado |
+| `status` | string | `EN_REVISION`, `EN_ESPERA`, `DISPONIBLE` o `ELIMINADA` |
+| `availableFrom` | string | Fin del período de espera (ISO 8601) |
+| `createdAt` | string | Fecha de registro (ISO 8601) |
+| `origin` | string | `PANEL` (dashboard) o `API` |
+| `apiKeyPrefix` | string \| null | Prefijo de la llave que la registró; `null` si `origin` es `PANEL` |
+
+| `status` | Significado |
+|---|---|
+| `EN_REVISION` | Pendiente de la revisión de cumplimiento. Todavía no opera |
+| `EN_ESPERA` | Aprobada, en período de espera hasta `availableFrom` (solo si tu empresa tiene configurado uno) |
+| `DISPONIBLE` | Lista para operar: es la única que acepta cotizaciones |
+| `ELIMINADA` | Dada de baja (por tu empresa o por Mouv). No opera y no aparece en [`GET /swaps/wallets`](/api-reference/swaps/list-wallets) |
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no autorizada para la llave |
+| 404 | `WALLET_NOT_FOUND` | La billetera no existe o es de otra empresa |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps/wallets/5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

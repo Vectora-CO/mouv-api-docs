@@ -1,0 +1,132 @@
+---
+title: POST /swaps/wallets
+description: Registrar una billetera de tu empresa por API (requiere habilitación)
+api: 'POST https://consola.mouvlatam.com/api/swaps/wallets'
+---
+
+Registra una billetera de tu empresa donde recibirás USDT. La billetera pasa por una **revisión de cumplimiento** antes de poder operar.
+
+**Scope requerido**: `SWAP` con el permiso **Gestionar billeteras** · **Idempotente por `Idempotency-Key`** (obligatorio).
+
+<Warning>
+Esta función **no está activa por defecto**. Por defecto las billeteras se registran desde el dashboard con rol `ADMIN` y código 2FA. Para usar este endpoint se necesitan, a la vez:
+
+1. Que Mouv habilite la gestión de billeteras por API para tu empresa (escríbenos a [hola@vectora.com.co](mailto:hola@vectora.com.co)).
+2. Una llave `SWAP` creada en el dashboard (con 2FA) con el permiso **Gestionar billeteras** y la lista de IPs autorizadas (`allowedIps`) obligatoria. Ver [Autenticación](/authentication).
+
+Si falta alguno, la llave recibe `403`. Una llave sin el permiso sigue pudiendo **listar** y **consultar** billeteras, pero no registrarlas ni eliminarlas.
+</Warning>
+
+## Reglas
+
+- **El titular es siempre tu empresa** (razón social registrada en Mouv). No se aceptan billeteras de terceros ni de personas naturales.
+- Con API key **no se pide 2FA**: la llave restringida por IP es la credencial.
+- La billetera nace `EN_REVISION`. No acepta cotizaciones hasta quedar `DISPONIBLE`. Consúltala con [`GET /swaps/wallets/:walletId`](/api-reference/swaps/get-wallet).
+- Si Mouv configuró un período de espera para tu empresa, tras la revisión pasa por `EN_ESPERA` hasta `availableFrom`.
+- Los administradores de tu empresa reciben un correo por cada billetera registrada por API y pueden marcar **No la reconozco** en el dashboard: eso da de baja las billeteras registradas por esa llave y **revoca la llave**.
+- Límites: máximo **10 altas por API en 24 horas** (ventana móvil, por empresa, incluye las ya eliminadas) y máximo **20 billeteras vigentes**.
+
+## Headers
+
+<ParamField header="Idempotency-Key" type="string" required>
+  De 8 a 128 caracteres: letras, números y `_ - : .` (por ejemplo un UUID). Genera una nueva por cada billetera y reutilízala **solo** para reintentar ese mismo registro.
+</ParamField>
+
+## Body
+
+<ParamField body="network" type="string" required>
+  Red de la billetera. Debe estar entre las redes habilitadas para tu empresa (ver [`GET /swaps/networks`](/api-reference/swaps/networks)).
+</ParamField>
+
+<ParamField body="address" type="string" required>
+  Dirección de la billetera, con el formato de la red. Las direcciones `POLYGON` con mayúsculas y minúsculas se validan por checksum; la respuesta devuelve la dirección en su forma canónica (las de `POLYGON` en minúsculas).
+</ParamField>
+
+<ParamField body="ownershipDeclaration" type="boolean" required>
+  Debe ser `true`: declaras que la billetera pertenece a tu empresa.
+</ParamField>
+
+<ParamField body="label" type="string">
+  Nombre opcional para identificarla (hasta 60 caracteres).
+</ParamField>
+
+Con API key el titular se toma siempre de la razón social de tu empresa. Si envías `beneficiaryName` o `beneficiaryType`, deben coincidir con la empresa (`LEGAL`); de lo contrario responde `422 WALLET_BENEFICIARY_MUST_BE_COMPANY`. Lo recomendado es no enviarlos.
+
+## Response 201 (billetera nueva) · 200 (reintento idempotente)
+
+```json
+{
+  "wallet": {
+    "id": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+    "network": "TRON",
+    "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "label": "Tesorería",
+    "status": "EN_REVISION",
+    "availableFrom": "2026-10-19T15:00:00.000Z",
+    "createdAt": "2026-10-19T15:00:00.000Z",
+    "origin": "API",
+    "apiKeyPrefix": "mvk_a1b2c3"
+  },
+  "replay": false
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `wallet.id` | string | Úsalo como `walletId` al cotizar, y para consultar o eliminar |
+| `wallet.status` | string | `EN_REVISION` al crearla. Ver [`GET /swaps/wallets`](/api-reference/swaps/list-wallets) |
+| `wallet.availableFrom` | string | Fin del período de espera (ISO 8601). La billetera opera desde esa fecha solo si además superó la revisión |
+| `wallet.origin` | string | `API` para esta vía; `PANEL` si se registró en el dashboard |
+| `wallet.apiKeyPrefix` | string \| null | Prefijo visible de la llave que la registró |
+| `replay` | boolean | `true` si fue un reintento con la misma `Idempotency-Key` |
+
+## Idempotencia
+
+| Situación | Respuesta |
+|---|---|
+| Misma `Idempotency-Key` y mismo cuerpo (`network`, `address`, `label`) | `200` con la misma billetera y `"replay": true`; no cuenta contra el tope diario |
+| Misma `Idempotency-Key` con **otro** cuerpo | `409 IDEMPOTENCY_KEY_REUSED` |
+| Misma dirección y red ya registradas con otra `Idempotency-Key` | `409 WALLET_DUPLICATE` |
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | Falta el header `Idempotency-Key` |
+| 400 | `IDEMPOTENCY_KEY_INVALID` | El formato no es válido (8 a 128 caracteres: letras, números y `_ - : .`) |
+| 400 | `OWNERSHIP_DECLARATION_REQUIRED` | `ownershipDeclaration` no es `true` |
+| 400 | `INVALID_ADDRESS` | La dirección no tiene un formato válido para la red |
+| 400 | `INVALID_ADDRESS_CHECKSUM` | La dirección mezcla mayúsculas y minúsculas y su checksum no coincide: cópiala de nuevo |
+| 400 | `INVALID_REQUEST` | `network`, `label` u otro campo inválido |
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada (por ejemplo tras un **No la reconozco**) |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no autorizada para la llave |
+| 403 | `WALLET_PERMISSION_REQUIRED` | La llave no tiene el permiso **Gestionar billeteras**. Crea una llave nueva con el permiso |
+| 403 | `IP_ALLOWLIST_REQUIRED` | La llave no tiene IPs autorizadas |
+| 403 | `WALLET_API_NOT_ENABLED` | La gestión por API no está habilitada para tu empresa. Contacta a soporte |
+| 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio de conversión |
+| 403 | `ADDRESS_NOT_ALLOWED` | No es posible registrar esta dirección. Contacta a soporte |
+| 409 | `WALLET_DUPLICATE` | La dirección ya está registrada para esa red |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con otra billetera |
+| 422 | `NETWORK_NOT_ALLOWED` | La red no está habilitada para tu empresa |
+| 422 | `WALLET_BENEFICIARY_MUST_BE_COMPANY` | La billetera debe estar a nombre de tu empresa |
+| 422 | `WALLET_LIMIT_REACHED` | Ya tienes 20 billeteras vigentes. Elimina una |
+| 429 | `WALLET_API_DAILY_LIMIT` | Máximo 10 altas por API en 24 horas. Reintenta más tarde o regístrala desde el dashboard |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff y la **misma** `Idempotency-Key` |
+
+<RequestExample>
+
+```bash curl
+curl -X POST "https://consola.mouvlatam.com/api/swaps/wallets" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Idempotency-Key: 0b8e6f34-91c2-4d57-a3e0-7c5d1f2a9b86" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "network": "TRON",
+    "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "label": "Tesorería",
+    "ownershipDeclaration": true
+  }'
+```
+
+</RequestExample>

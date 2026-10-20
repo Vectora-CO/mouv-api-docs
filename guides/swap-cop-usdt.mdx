@@ -29,13 +29,63 @@ No hay ambiente de pruebas (sandbox). El onboarding se hace con una **compra rea
 
 1. **Habilitación**: solicita a Mouv que active el servicio para tu empresa.
 2. **API key con scope `SWAP`**: un usuario `ADMIN` la crea en el dashboard (**API keys** → scope `SWAP`). Ver [Scopes y permisos](/scopes-and-permissions).
-3. **Billetera registrada**: las billeteras se registran **solo desde el dashboard**, con rol `ADMIN` y código 2FA. Por API solo se pueden **listar**.
+3. **Billetera registrada**: por defecto las billeteras se registran **desde el dashboard**, con rol `ADMIN` y código 2FA. Opcionalmente puedes registrarlas por API (ver [Registrar billeteras por API](#registrar-billeteras-por-api-opcional)).
 
 <Info>
-**¿Por qué las billeteras no se registran por API?** Es una medida de seguridad: si una API key se filtra, quien la tenga no puede registrar una billetera nueva y desviar tus fondos hacia ella. Las llaves solo pueden operar contra billeteras que ya aprobaste con 2FA desde el dashboard.
+**¿Por qué por defecto no se registran por API?** Es una medida de seguridad: si una API key se filtra, quien la tenga no puede registrar una billetera nueva y desviar tus fondos hacia ella. Una llave `SWAP` común solo puede operar contra billeteras que ya aprobaste con 2FA desde el dashboard.
 </Info>
 
-La billetera debe estar **a nombre de tu empresa** (razón social registrada en Mouv). No se aceptan billeteras de terceros ni de personas naturales. Una billetera nueva queda `EN_REVISION` hasta que es aprobada; luego pasa a `DISPONIBLE`. Si tu empresa tiene configurado un período de espera (`walletCooldownHours`, por defecto `0`), la billetera pasa por `EN_ESPERA` hasta `availableFrom`. Solo opera una billetera `DISPONIBLE`.
+La billetera debe estar **a nombre de tu empresa** (razón social registrada en Mouv). No se aceptan billeteras de terceros ni de personas naturales. Una billetera nueva queda `EN_REVISION` hasta que supera la revisión de cumplimiento; luego pasa a `DISPONIBLE`. Si tu empresa tiene configurado un período de espera (`walletCooldownHours`, por defecto `0`), la billetera pasa por `EN_ESPERA` hasta `availableFrom`. Solo opera una billetera `DISPONIBLE`.
+
+## Registrar billeteras por API (opcional)
+
+Si tu integración necesita dar de alta billeteras sin pasar por el dashboard, Mouv puede habilitar la **gestión de billeteras por API** para tu empresa. No está activa por defecto: solicítala a [hola@vectora.com.co](mailto:hola@vectora.com.co).
+
+Una vez habilitada, un usuario `ADMIN` crea en el dashboard (con 2FA) una llave `SWAP` con el permiso **Gestionar billeteras**. Reglas:
+
+- Las **IPs autorizadas (`allowedIps`) son obligatorias** para esa llave.
+- Máximo **2 llaves vigentes** con el permiso por empresa.
+- Con esa llave puedes usar [`POST /swaps/wallets`](/api-reference/swaps/create-wallet) y [`DELETE /swaps/wallets/:walletId`](/api-reference/swaps/delete-wallet), sin 2FA y con `Idempotency-Key` obligatoria en el alta. Una llave `SWAP` sin el permiso sigue pudiendo listar y consultar.
+- **El titular es siempre tu empresa.**
+- La billetera pasa por **revisión de cumplimiento** antes de poder operar: nace `EN_REVISION` y solo cuando está `DISPONIBLE` acepta cotizaciones. Haz polling a [`GET /swaps/wallets/:walletId`](/api-reference/swaps/get-wallet).
+- Límites: **10 altas por API cada 24 horas** y **20 billeteras vigentes**.
+- Los `ADMIN` de tu empresa reciben un **correo por cada billetera registrada por API**. Si no la reconocen, pueden marcar **No la reconozco** en el dashboard: se dan de baja las billeteras registradas por esa llave y la llave se **revoca**.
+
+Para saber si tu llave puede gestionar billeteras, consulta `canManageWallets` en [`GET /swaps/me`](/api-reference/swaps/me).
+
+<Warning>
+Si usas esta función, trata la llave con permiso de billeteras como una credencial de máxima sensibilidad: guárdala en un gestor de secretos, limita las IPs al mínimo y no la compartas con otros servicios. Usa una llave `SWAP` distinta, sin el permiso, para cotizar y aceptar.
+</Warning>
+
+### Flujo: registrar una billetera y esperar a que esté disponible
+
+```bash
+# 1. Verifica que tu llave puede gestionar billeteras (canManageWallets: true)
+curl "https://consola.mouvlatam.com/api/swaps/me" \
+  -H "Authorization: Bearer mvk_..."
+
+# 2. Registra la billetera (Idempotency-Key obligatoria)
+curl -X POST "https://consola.mouvlatam.com/api/swaps/wallets" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Idempotency-Key: 0b8e6f34-91c2-4d57-a3e0-7c5d1f2a9b86" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "network": "TRON",
+    "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "label": "Tesorería",
+    "ownershipDeclaration": true
+  }'
+# => 201 { "wallet": { "id": "5f0c...", "status": "EN_REVISION", ... }, "replay": false }
+
+# 3. Polling hasta que quede DISPONIBLE (revisión de cumplimiento)
+WALLET_ID="5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b"
+until [ "$(curl -s "https://consola.mouvlatam.com/api/swaps/wallets/$WALLET_ID" \
+  -H "Authorization: Bearer $MOUV_KEY" | jq -r .wallet.status)" = "DISPONIBLE" ]; do
+  sleep 60
+done
+```
+
+Si hay un timeout al registrar, **reintenta con la misma `Idempotency-Key`**: devuelve la misma billetera (`200`, `replay: true`) y no consume el tope diario. Si el estado pasa a `ELIMINADA`, la billetera fue dada de baja y no operará. La revisión puede tardar; no hay un plazo garantizado, así que usa un intervalo de consulta amplio (por ejemplo 1 minuto o más). Para eliminar una billetera: [`DELETE /swaps/wallets/:walletId`](/api-reference/swaps/delete-wallet).
 
 ## Flujo completo
 
@@ -151,7 +201,9 @@ Mouv aún no envía notificaciones automáticas de swaps: consulta el estado por
 | 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio. Solicita la habilitación |
 | 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` (una llave `WRITE` o `READ` no sirve en `/swaps`) |
 | 403 | `IP_NOT_ALLOWED` | La llave tiene IPs permitidas y la petición viene de otra. Revisa tu lista de IPs |
-| 403 | `WALLETS_REQUIRE_DASHBOARD` | Registrar o eliminar billeteras solo se hace desde el dashboard |
+| 403 | `WALLET_PERMISSION_REQUIRED` | Registrar o eliminar billeteras por API exige una llave `SWAP` con el permiso **Gestionar billeteras** (ver [Registrar billeteras por API](#registrar-billeteras-por-api-opcional)) |
+| 403 | `WALLET_API_NOT_ENABLED` | La gestión de billeteras por API no está habilitada para tu empresa. Úsala desde el dashboard o solicita la habilitación |
+| 429 | `WALLET_API_DAILY_LIMIT` | Máximo 10 billeteras registradas por API en 24 horas |
 | 410 | `QUOTE_EXPIRED` | La cotización venció. Cotiza de nuevo y usa una `Idempotency-Key` nueva |
 | 409 | `QUOTE_ALREADY_USED` | La cotización ya fue aceptada. El body trae `swapId`: consúltala con `GET /swaps/:id` |
 | 422 | `AMOUNT_BELOW_MINIMUM` | Monto menor al mínimo de tu empresa (ver `minUsdt`). En `TRON` el mínimo es mayor por el costo de la red: para montos pequeños usa `POLYGON` o aumenta el monto |
@@ -192,6 +244,9 @@ La lista completa está en [Códigos de error](/errors).
   <Card title="GET /swaps/me" href="/api-reference/swaps/me" />
   <Card title="GET /swaps/networks" href="/api-reference/swaps/networks" />
   <Card title="GET /swaps/wallets" href="/api-reference/swaps/list-wallets" />
+  <Card title="POST /swaps/wallets" href="/api-reference/swaps/create-wallet" />
+  <Card title="GET /swaps/wallets/:walletId" href="/api-reference/swaps/get-wallet" />
+  <Card title="DELETE /swaps/wallets/:walletId" href="/api-reference/swaps/delete-wallet" />
   <Card title="POST /swaps/quotes" href="/api-reference/swaps/create-quote" />
   <Card title="POST /swaps" href="/api-reference/swaps/accept" />
   <Card title="GET /swaps" href="/api-reference/swaps/list" />

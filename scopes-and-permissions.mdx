@@ -24,6 +24,18 @@ Cada API key se genera con uno de estos scopes:
 - Solo puedes crear una llave `SWAP` si Mouv habilitó el servicio de conversión para tu empresa. Si no, la creación responde `403 SWAPS_NOT_ENABLED`.
 - Opcionalmente, una llave puede restringirse a una lista de IPs (`allowedIps`); es **recomendado** para llaves `SWAP`. Una petición desde otra IP recibe `403 IP_NOT_ALLOWED`. Ver [Autenticación](/authentication).
 
+### Permiso adicional: "Gestionar billeteras"
+
+Una llave `SWAP` puede tener, además, el permiso **Gestionar billeteras**, que le permite registrar y eliminar billeteras de tu empresa por API (`POST` y `DELETE /swaps/wallets`). No es un scope nuevo: es una capacidad adicional del scope `SWAP`.
+
+- Solo existe en llaves `SWAP`; pedirlo con otro scope responde `400 INVALID_SCOPE_COMBINATION`.
+- Exige `allowedIps` (`400 IP_ALLOWLIST_REQUIRED` si faltan) y que Mouv haya habilitado la función para tu empresa (`403 WALLET_API_NOT_ENABLED`).
+- Se define al crear la llave, en el dashboard y con 2FA; no se puede agregar después a una llave existente.
+- Máximo 2 llaves vigentes con el permiso por empresa (`409 WALLET_API_KEY_LIMIT`).
+- Una llave `SWAP` sin el permiso recibe `403 WALLET_PERMISSION_REQUIRED` en el alta y la baja, pero puede listar y consultar billeteras.
+
+Detalle en [Conversión COP→USDT](/guides/swap-cop-usdt#registrar-billeteras-por-api-opcional) y [Autenticación](/authentication).
+
 ## Tabla de permisos por endpoint
 
 | Endpoint | READ | WRITE |
@@ -48,6 +60,9 @@ Los endpoints `/swaps/*` solo aceptan el scope `SWAP`:
 | `GET /swaps/me` | ❌ | ❌ | ✅ |
 | `GET /swaps/networks` | ❌ | ❌ | ✅ |
 | `GET /swaps/wallets` | ❌ | ❌ | ✅ |
+| `GET /swaps/wallets/:walletId` | ❌ | ❌ | ✅ |
+| `POST /swaps/wallets` | ❌ | ❌ | ✅ con permiso "Gestionar billeteras" |
+| `DELETE /swaps/wallets/:walletId` | ❌ | ❌ | ✅ con permiso "Gestionar billeteras" |
 | `POST /swaps/quotes` | ❌ | ❌ | ✅ |
 | `POST /swaps` | ❌ | ❌ | ✅ |
 | `GET /swaps` | ❌ | ❌ | ✅ |

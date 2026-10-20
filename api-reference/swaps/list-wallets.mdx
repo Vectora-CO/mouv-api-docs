@@ -9,8 +9,10 @@ Lista las billeteras vigentes de tu empresa donde puedes recibir USDT.
 **Scope requerido**: `SWAP`.
 
 <Warning>
-Las billeteras se registran y eliminan **solo desde el dashboard**, con rol `ADMIN` y código 2FA. Por API solo se pueden listar: cualquier intento de alta o baja con API key responde `403 WALLETS_REQUIRE_DASHBOARD`. Es una medida de seguridad: una llave filtrada no puede desviar fondos a una billetera nueva.
+Por defecto las billeteras se registran y eliminan **desde el dashboard**, con rol `ADMIN` y código 2FA. Una llave `SWAP` común solo puede listarlas y consultarlas: un intento de alta o baja responde `403 WALLET_PERMISSION_REQUIRED`. Si Mouv habilita la gestión por API para tu empresa, una llave con el permiso **Gestionar billeteras** (e IPs autorizadas) puede usar [`POST /swaps/wallets`](/api-reference/swaps/create-wallet) y [`DELETE /swaps/wallets/:walletId`](/api-reference/swaps/delete-wallet). Ver la [guía](/guides/swap-cop-usdt#registrar-billeteras-por-api-opcional).
 </Warning>
+
+Solo lista billeteras **vigentes**; las eliminadas no aparecen (consúltalas por id con [`GET /swaps/wallets/:walletId`](/api-reference/swaps/get-wallet)).
 
 ## Response 200
 
@@ -24,7 +26,9 @@ Las billeteras se registran y eliminan **solo desde el dashboard**, con rol `ADM
       "label": "Tesorería",
       "status": "DISPONIBLE",
       "availableFrom": "2026-10-08T15:00:00.000Z",
-      "createdAt": "2026-10-08T15:00:00.000Z"
+      "createdAt": "2026-10-08T15:00:00.000Z",
+      "origin": "PANEL",
+      "apiKeyPrefix": null
     }
   ]
 }
@@ -35,14 +39,16 @@ Las billeteras se registran y eliminan **solo desde el dashboard**, con rol `ADM
 | `id` | string | Úsalo como `walletId` al cotizar |
 | `network` | string | `TRON` o `POLYGON` |
 | `address` | string | Dirección de la billetera |
-| `label` | string \| null | Nombre que le diste en el dashboard |
+| `label` | string \| null | Nombre que le diste al registrarla |
 | `status` | string | `EN_REVISION`, `EN_ESPERA` o `DISPONIBLE` |
 | `availableFrom` | string | Fecha ISO 8601 desde la que la billetera puede operar, si además está aprobada |
 | `createdAt` | string | Fecha de registro (ISO 8601) |
+| `origin` | string | `PANEL` (registrada en el dashboard) o `API` |
+| `apiKeyPrefix` | string \| null | Prefijo visible de la llave que la registró; `null` si `origin` es `PANEL` |
 
 | `status` | Significado |
 |---|---|
-| `EN_REVISION` | Pendiente de aprobación. Todavía no opera |
+| `EN_REVISION` | Pendiente de la revisión de cumplimiento. Todavía no opera |
 | `EN_ESPERA` | Aprobada, en período de espera hasta `availableFrom` (solo si tu empresa tiene configurado un período de espera; por defecto no hay) |
 | `DISPONIBLE` | Lista para operar: es la única que acepta cotizaciones |
 

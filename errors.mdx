@@ -182,7 +182,22 @@ Pueden traer campos extra, siempre como `string`: `minUsdt`, `maxUsdt`, `retryAf
 | 403 | `COMPANY_NOT_ACTIVE` | Tu empresa no está activa para operar |
 | 403 | `BLACKLISTED` | No es posible procesar la operación. Contacta a soporte |
 | 403 | `MULTISIG_NOT_SUPPORTED` | El servicio aún no está disponible para empresas con aprobación multifirma |
-| 403 | `WALLETS_REQUIRE_DASHBOARD` | Registrar o eliminar billeteras solo se hace desde el dashboard, con 2FA |
+| 403 | `WALLETS_REQUIRE_DASHBOARD` | Esta acción sobre billeteras solo se hace desde el dashboard, con 2FA |
+| 403 | `WALLET_PERMISSION_REQUIRED` | La llave no tiene el permiso **Gestionar billeteras**. Crea una llave `SWAP` con el permiso |
+| 403 | `IP_ALLOWLIST_REQUIRED` | La llave no tiene IPs autorizadas (`allowedIps`). Se exigen para gestionar billeteras por API. Al crear la llave responde `400` |
+| 403 | `WALLET_API_NOT_ENABLED` | La gestión de billeteras por API no está habilitada para tu empresa. Contacta a soporte. Al crear la llave también responde `403` |
+| 400 | `INVALID_SCOPE_COMBINATION` | Al crear la llave: el permiso **Gestionar billeteras** solo existe en llaves `SWAP` |
+| 409 | `WALLET_API_KEY_LIMIT` | Al crear la llave: ya hay 2 llaves vigentes con el permiso. El body trae `activeCount` y `cap`. Revoca una |
+| 400 | `IDEMPOTENCY_KEY_INVALID` | En `POST /swaps/wallets`: formato inválido de `Idempotency-Key` (8 a 128 caracteres: letras, números y `_ - : .`) |
+| 400 | `OWNERSHIP_DECLARATION_REQUIRED` | En `POST /swaps/wallets`: falta `ownershipDeclaration: true` |
+| 400 | `INVALID_ADDRESS`, `INVALID_ADDRESS_CHECKSUM` | La dirección no tiene un formato válido para la red, o su checksum no coincide |
+| 403 | `ADDRESS_NOT_ALLOWED` | No es posible registrar esta dirección. Contacta a soporte |
+| 404 | `WALLET_NOT_FOUND` | La billetera no existe o es de otra empresa |
+| 409 | `WALLET_DUPLICATE` | La dirección ya está registrada para esa red |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | En `POST /swaps/wallets`: la `Idempotency-Key` ya se usó con otra billetera (en `POST /swaps` este mismo código responde `422`) |
+| 422 | `WALLET_BENEFICIARY_MUST_BE_COMPANY` | La billetera debe estar a nombre de tu empresa |
+| 422 | `WALLET_LIMIT_REACHED` | Máximo 20 billeteras vigentes. Elimina una |
+| 429 | `WALLET_API_DAILY_LIMIT` | Máximo 10 billeteras registradas por API en 24 horas |
 | 404 | `QUOTE_NOT_FOUND` | La cotización no existe o es de otra empresa |
 | 404 | `SWAP_NOT_FOUND` | La operación no existe o es de otra empresa |
 | 409 | `QUOTE_ALREADY_USED` | La cotización ya fue aceptada. El body trae `swapId`: consúltalo con `GET /swaps/:id` |

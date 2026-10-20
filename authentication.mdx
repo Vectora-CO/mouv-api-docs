@@ -22,7 +22,16 @@ Las llaves comienzan con el prefijo **`mvk_`** seguido de ~96 bits de entropía 
 5. Elegí el **scope**: `READ` (solo lectura) o `WRITE` (lectura + operaciones financieras)
    - `SWAP` (solo la [Conversión COP→USDT](/guides/swap-cop-usdt)) está disponible únicamente si Mouv habilitó el servicio para tu empresa; si no, la creación responde `403 SWAPS_NOT_ENABLED`.
 6. Opcional: define **`allowedIps`** (`string[]`), la lista de IPs desde las que se puede usar la llave. Si la defines, una petición desde otra IP recibe `403 IP_NOT_ALLOWED`. Es **recomendado para llaves `SWAP`**: usa las IPs de salida de tus servidores. Si no la defines, la llave funciona desde cualquier IP. Acepta IPs sueltas o rangos CIDR (hasta `/24` en IPv4 y `/48` en IPv6), máximo 20 entradas; una lista inválida responde `400 INVALID_ALLOWED_IPS`.
-7. La llave plana se muestra **una sola vez**. Copiala y guardala en tu secret manager — Mouv solo almacena un hash bcrypt, no podemos recuperarla
+7. Opcional, solo para llaves `SWAP`: marca **Gestionar billeteras** (`canManageSwapWallets: true` en la API del dashboard) para que la llave pueda registrar y eliminar billeteras por API. Reglas:
+   - Requiere `allowedIps` (si faltan: `400 IP_ALLOWLIST_REQUIRED`).
+   - Solo con scope `SWAP` (otro scope: `400 INVALID_SCOPE_COMBINATION`).
+   - Requiere que Mouv habilite la función para tu empresa (`403 WALLET_API_NOT_ENABLED`).
+   - Máximo 2 llaves vigentes con el permiso por empresa (`409 WALLET_API_KEY_LIMIT`; el body trae `activeCount` y `cap`).
+   - Las llaves `SWAP` y las que tienen este permiso se crean con tu código 2FA. La respuesta de creación incluye `canManageSwapWallets`.
+   - Si un administrador marca **No la reconozco** sobre una billetera registrada por la llave, la llave se revoca.
+
+   Ver [Conversión COP→USDT](/guides/swap-cop-usdt#registrar-billeteras-por-api-opcional).
+8. La llave plana se muestra **una sola vez**. Copiala y guardala en tu secret manager — Mouv solo almacena un hash bcrypt, no podemos recuperarla
 
 <Warning>
 **Si perdés una llave, generá una nueva**. Mouv NO puede mostrarte llaves existentes — solo el hash queda almacenado.
