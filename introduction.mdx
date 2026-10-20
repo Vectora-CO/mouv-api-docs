@@ -5,7 +5,7 @@ description: API REST de Mouv Platform para integraciones cliente
 
 ## Bienvenido
 
-La API de **Mouv Platform** te permite integrar pagos digitales colombianos directamente en tu sistema: leer saldos, hacer retiros vía Bre-B o ACH, y generar links de recaudo PSE — todo desde una única API REST.
+La API de **Mouv Platform** te permite integrar pagos digitales colombianos directamente en tu sistema: leer saldos, hacer retiros vía Bre-B o ACH, generar links de recaudo PSE y convertir pesos a USDT — todo desde una única API REST.
 
 ```bash
 curl https://consola.mouvlatam.com/api/wallets/balance \
@@ -14,7 +14,7 @@ curl https://consola.mouvlatam.com/api/wallets/balance \
 
 ## Conceptos públicos
 
-La API expone solo **rails de pago colombianos** (BREB, ACH, PSE). Los proveedores subyacentes nunca son parte del contrato público — Mouv abstrae múltiples BaaS para que tu integración no dependa de uno específico.
+La API expone **rails de pago colombianos** (BREB, ACH, PSE) y la **conversión COP→USDT**. Los proveedores subyacentes nunca son parte del contrato público — Mouv abstrae múltiples BaaS para que tu integración no dependa de uno específico.
 
 <CardGroup cols={2}>
   <Card title="BREB" icon="bolt">
@@ -25,6 +25,9 @@ La API expone solo **rails de pago colombianos** (BREB, ACH, PSE). Los proveedor
   </Card>
   <Card title="PSE" icon="circle-down">
     Recaudo entrante — generás un link, el pagador completa el flujo PSE, el monto neto se acredita a tu wallet ACH.
+  </Card>
+  <Card title="COP→USDT" icon="arrow-right-arrow-left" href="/guides/swap-cop-usdt">
+    Compra USDT con los pesos de tu cuenta y recíbelos en tu billetera (TRON o Polygon). Servicio habilitado por empresa.
   </Card>
   <Card title="Multi-tenant" icon="lock">
     Cada API key está bound a UNA cuenta empresarial. Acceso scoped a tus propios datos. Revocación instantánea.
