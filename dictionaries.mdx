@@ -33,11 +33,11 @@ Los IDs son estables — Mouv añade IDs nuevos cuando se onboardean bancos nuev
 
 Constantes hardcoded:
 
-| ID | Nombre | Equivalente Coink internal |
+| ID | Nombre | Código ISO 20022 |
 |---|---|---|
 | `20` | Ahorros | SVGS |
 | `21` | Corriente | CHCK |
-| `22` | Depósito electrónico | (Nequi/Daviplata-style) |
+| `22` | Depósito electrónico | (billeteras tipo Nequi/Daviplata) |
 
 ## Tipos de documento (`documentTypeId`)
 
@@ -49,7 +49,7 @@ Constantes hardcoded:
 | `8` | NIT | Persona jurídica colombiana |
 
 <Note>
-Estos IDs son los oficiales de la red ACH colombiana (heredados del estándar Coink BaaS). Mouv NO acepta otros tipos en V1 (ej. tarjeta de identidad TI, registro civil RC — Bre-B y ACH no transactean con menores).
+Estos IDs siguen los tipos de documento de la red ACH colombiana. Mouv NO acepta otros tipos en V1 (ej. tarjeta de identidad TI, registro civil RC — Bre-B y ACH no transactean con menores).
 </Note>
 
 ## Status de deposit PSE

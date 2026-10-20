@@ -4,7 +4,7 @@ description: Enviar link PSE al pagador por email
 api: 'POST https://consola.mouvlatam.com/api/deposits/:id/share-email'
 ---
 
-Envía el link PSE de un deposit al email del pagador. Mouv usa AWS SES — el email viene de `pagos@mouvlatam.com` con tu logo + el `paygatewayUrl`.
+Envía el link PSE de un deposit al email del pagador. El email viene de `pagos@mouvlatam.com` con tu logo + el `paygatewayUrl`.
 
 **Scope**: `WRITE`
 
@@ -74,4 +74,3 @@ async function sharePseByEmail(depositId, email, name) {
 
 - Mouv NO permite enviar emails con plantilla custom desde tu cuenta — el shape del email es estándar Mouv
 - Para customización (sender domain, branding), contactanos
-- AWS SES production mode activado para Mouv — sin sandbox restrictions

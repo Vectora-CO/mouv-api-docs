@@ -3,7 +3,7 @@ title: Rate limits
 description: Límites de requests por tipo de endpoint
 ---
 
-Mouv aplica rate limiting por IP origen sobre el header `X-Forwarded-For` (vía CloudFront). Los límites se aplican por minuto rolling window.
+Mouv aplica límites de requests por IP de origen y, en algunos endpoints, por empresa. Los límites se aplican sobre una ventana móvil de un minuto.
 
 ## Límites actuales
 
