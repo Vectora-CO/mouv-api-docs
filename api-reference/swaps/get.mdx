@@ -1,0 +1,85 @@
+---
+title: GET /swaps/:id
+description: Detalle y estado de una operación de conversión
+api: 'GET https://consola.mouvlatam.com/api/swaps/{id}'
+---
+
+Devuelve una operación de tu empresa. Úsalo para hacer polling del estado hasta llegar a `COMPLETADO` o `CANCELADO`.
+
+**Scope requerido**: `SWAP` · **Polling recomendado**: cada 10 a 15 segundos.
+
+## URL params
+
+<ParamField path="id" type="string" required>
+  `swap.id` devuelto por [`POST /swaps`](/api-reference/swaps/accept).
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "swap": {
+    "id": "e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38",
+    "status": "COMPLETADO",
+    "side": "BUY",
+    "network": "TRON",
+    "usdtAmount": "1000.000000",
+    "usdtAmountMicro": "1000000000",
+    "copAmount": "4012350.00",
+    "copAmountCents": "401235000",
+    "rate": "4012.35",
+    "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+    "destinationAddress": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "depositAddress": null,
+    "txHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "clientTxHash": null,
+    "failureCode": null,
+    "failureMessage": null,
+    "createdAt": "2026-10-08T15:00:00.000Z",
+    "acceptedAt": "2026-10-08T15:00:12.000Z",
+    "settledAt": "2026-10-08T15:06:40.000Z",
+    "cancelledAt": null
+  }
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `id`, `side`, `network`, `walletId` | Identificadores y datos de la operación |
+| `status` | `PROCESANDO`, `COMPLETADO`, `CANCELADO` o `EN_REVISION` |
+| `usdtAmount`, `usdtAmountMicro` | USDT de la operación (decimal con 6 decimales / entero en millonésimas) |
+| `copAmount`, `copAmountCents` | COP de la operación (decimal con 2 decimales / entero en centavos) |
+| `rate` | Pesos por 1 USDT: la tasa final |
+| `destinationAddress` | Dirección donde se entregan los USDT |
+| `depositAddress`, `clientTxHash` | No aplican a la compra: siempre `null` |
+| `txHash` | Hash de la transacción on-chain. Está presente al completarse y puede aparecer antes, mientras sigue en `PROCESANDO` |
+| `failureCode`, `failureMessage` | Solo en `CANCELADO` (y `failureMessage` en `EN_REVISION`). Una cancelación posterior a la aceptación trae `failureCode: "CANCELLED"`; un rechazo al aceptar trae el código del error (por ejemplo `LIMIT_EXCEEDED`) o `"REJECTED"` |
+| `createdAt`, `acceptedAt`, `settledAt`, `cancelledAt` | Fechas ISO 8601 en UTC (`null` si aún no ocurrió) |
+
+## Estados
+
+| Estado | Significado | ¿Final? |
+|---|---|---|
+| `PROCESANDO` | Aceptada; los USDT están en camino. Puede durar **varios minutos** | No |
+| `COMPLETADO` | USDT entregados. Incluye `txHash` y hay comprobante | Sí |
+| `CANCELADO` | No se ejecutó; los pesos se devuelven. Ver `failureCode` | Sí |
+| `EN_REVISION` | Mouv revisa la operación. No repitas la compra: contacta a soporte con el `id` si se demora | No |
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no permitida para la llave |
+| 404 | `SWAP_NOT_FOUND` | El `id` no existe o es de otra empresa. Verifica el ID |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps/e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

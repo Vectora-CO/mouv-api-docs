@@ -1,0 +1,44 @@
+---
+title: GET /swaps/:id/receipt.pdf
+description: Comprobante PDF de una operación de conversión completada
+api: 'GET https://consola.mouvlatam.com/api/swaps/{id}/receipt.pdf'
+---
+
+Descarga el comprobante en PDF de una operación. Está disponible **solo cuando la operación está `COMPLETADO`**.
+
+**Scope requerido**: `SWAP`.
+
+## URL params
+
+<ParamField path="id" type="string" required>
+  `swap.id` de la operación.
+</ParamField>
+
+## Response 200
+
+- `Content-Type: application/pdf`
+- `Content-Disposition: attachment; filename="comprobante-swap-<primeros 8 caracteres del id>.pdf"`
+- `Cache-Control: private, no-store`
+
+Body: bytes del PDF.
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no permitida para la llave |
+| 404 | `SWAP_NOT_FOUND` | El `id` no existe o es de otra empresa |
+| 409 | `RECEIPT_NOT_AVAILABLE` | La operación aún no está `COMPLETADO`. Consulta `GET /swaps/:id` y reintenta al completarse |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl -o comprobante.pdf \
+  "https://consola.mouvlatam.com/api/swaps/e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38/receipt.pdf" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

@@ -1,18 +1,28 @@
 ---
 title: Scopes y permisos
-description: READ vs WRITE — qué puede hacer cada tipo de API key
+description: READ, WRITE y SWAP — qué puede hacer cada tipo de API key
 ---
 
 ## Scopes
 
-Cada API key se genera con uno de dos scopes:
+Cada API key se genera con uno de estos scopes:
 
 | Scope | Acceso | Cuándo usar |
 |---|---|---|
 | `READ` | Solo lectura | Sistemas de reporting, observabilidad, BI |
 | `WRITE` | Lectura + operaciones financieras | Servicios que disparan retiros/recaudos |
+| `SWAP` | Solo la [Conversión COP→USDT](/guides/swap-cop-usdt) (`/swaps/*`) | Servicios que compran USDT con tus pesos |
 
 `WRITE` es un superset de `READ`: cualquier endpoint que acepta `READ` también acepta `WRITE`.
+
+### El scope `SWAP` es exacto
+
+`SWAP` **no se hereda de `WRITE`** ni de `READ`, y tampoco los reemplaza:
+
+- Una llave `WRITE` o `READ` que llama a `/swaps/*` recibe `403 INSUFFICIENT_SCOPE`.
+- Una llave `SWAP` que llama a cualquier ruta fuera de `/swaps/*` recibe `403 SCOPE_ROUTE_FORBIDDEN`.
+- Solo puedes crear una llave `SWAP` si Mouv habilitó el servicio de conversión para tu empresa. Si no, la creación responde `403 SWAPS_NOT_ENABLED`.
+- Opcionalmente, una llave puede restringirse a una lista de IPs (`allowedIps`); es **recomendado** para llaves `SWAP`. Una petición desde otra IP recibe `403 IP_NOT_ALLOWED`. Ver [Autenticación](/authentication).
 
 ## Tabla de permisos por endpoint
 
@@ -30,6 +40,19 @@ Cada API key se genera con uno de dos scopes:
 | `POST /transfers/send` | ❌ | ✅ |
 | `POST /deposits/pse` | ❌ | ✅ |
 | `POST /deposits/:id/share-email` | ❌ | ✅ |
+
+Los endpoints `/swaps/*` solo aceptan el scope `SWAP`:
+
+| Endpoint | READ | WRITE | SWAP |
+|---|:---:|:---:|:---:|
+| `GET /swaps/me` | ❌ | ❌ | ✅ |
+| `GET /swaps/networks` | ❌ | ❌ | ✅ |
+| `GET /swaps/wallets` | ❌ | ❌ | ✅ |
+| `POST /swaps/quotes` | ❌ | ❌ | ✅ |
+| `POST /swaps` | ❌ | ❌ | ✅ |
+| `GET /swaps` | ❌ | ❌ | ✅ |
+| `GET /swaps/:id` | ❌ | ❌ | ✅ |
+| `GET /swaps/:id/receipt.pdf` | ❌ | ❌ | ✅ |
 
 ## Respuestas de scope insuficiente
 

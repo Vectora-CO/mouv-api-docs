@@ -86,6 +86,20 @@
         ]
       },
       {
+        "group": "Conversión COP→USDT",
+        "pages": [
+          "guides/swap-cop-usdt",
+          "api-reference/swaps/me",
+          "api-reference/swaps/networks",
+          "api-reference/swaps/list-wallets",
+          "api-reference/swaps/create-quote",
+          "api-reference/swaps/accept",
+          "api-reference/swaps/list",
+          "api-reference/swaps/get",
+          "api-reference/swaps/receipt"
+        ]
+      },
+      {
         "group": "Transacciones",
         "pages": [
           "api-reference/transactions/list",

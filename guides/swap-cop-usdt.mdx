@@ -1,0 +1,200 @@
+---
+title: Conversión COP→USDT
+description: Compra USDT con los pesos de tu cuenta Mouv, paso a paso, por API
+---
+
+Con el servicio de **Conversión COP→USDT** conviertes pesos colombianos de tu cuenta Mouv en USDT, que se entregan on-chain a una billetera de tu empresa. Los USDT **no se acreditan como saldo** en Mouv: llegan directamente a tu billetera.
+
+<Note>
+El servicio se habilita **por empresa** y solo para clientes seleccionados. Si tu empresa no lo tiene activo, los endpoints responden `403 SWAP_NOT_ENABLED` y no es posible crear una API key con scope `SWAP`. Escríbenos a [hola@vectora.com.co](mailto:hola@vectora.com.co) para solicitarlo.
+</Note>
+
+## Qué incluye
+
+| Aspecto | Detalle |
+|---|---|
+| Operación | **Compra** de USDT pagando COP (`side: "BUY"`) |
+| Redes | `TRON` (USDT por TRC20) y `POLYGON` |
+| Precio | Referencia de mercado del dólar en Colombia + margen pactado con tu empresa. Fuera del horario de mercado (después de las 13:00 hora de Colombia, fines de semana y festivos) se usa el último cierre + el margen fuera de horario pactado. |
+| Cotización | Firme y con vencimiento (`expiresAt`): se acepta una sola vez |
+| Montos mínimos, máximos y límites diario/mensual | Según la configuración de tu empresa. Consúltalos en [`GET /swaps/me`](/api-reference/swaps/me) |
+| Estado | Por polling a `GET /swaps/:id` |
+| Comprobante | PDF descargable al completarse |
+
+<Warning>
+No hay ambiente de pruebas (sandbox). El onboarding se hace con una **compra real de monto mínimo**, acompañada por el equipo de Mouv.
+</Warning>
+
+## Antes de empezar
+
+1. **Habilitación**: solicita a Mouv que active el servicio para tu empresa.
+2. **API key con scope `SWAP`**: un usuario `ADMIN` la crea en el dashboard (**API keys** → scope `SWAP`). Ver [Scopes y permisos](/scopes-and-permissions).
+3. **Billetera registrada**: las billeteras se registran **solo desde el dashboard**, con rol `ADMIN` y código 2FA. Por API solo se pueden **listar**.
+
+<Info>
+**¿Por qué las billeteras no se registran por API?** Es una medida de seguridad: si una API key se filtra, quien la tenga no puede registrar una billetera nueva y desviar tus fondos hacia ella. Las llaves solo pueden operar contra billeteras que ya aprobaste con 2FA desde el dashboard.
+</Info>
+
+La billetera debe estar **a nombre de tu empresa** (razón social registrada en Mouv). No se aceptan billeteras de terceros ni de personas naturales. Una billetera nueva queda `EN_REVISION` hasta que es aprobada; luego pasa a `DISPONIBLE`. Si tu empresa tiene configurado un período de espera (`walletCooldownHours`, por defecto `0`), la billetera pasa por `EN_ESPERA` hasta `availableFrom`. Solo opera una billetera `DISPONIBLE`.
+
+## Flujo completo
+
+Todos los ejemplos usan la base `https://consola.mouvlatam.com/api` y el header `Authorization: Bearer mvk_...` con tu llave `SWAP`.
+
+### 1. Consultar si puedes operar y tus límites
+
+```bash
+curl "https://consola.mouvlatam.com/api/swaps/me" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+Revisa `enabled`, `networks`, `minUsdt` y `maxUsdt`. Ver [`GET /swaps/me`](/api-reference/swaps/me).
+
+### 2. Ver las redes habilitadas
+
+```bash
+curl "https://consola.mouvlatam.com/api/swaps/networks" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+```json
+{ "networks": ["TRON", "POLYGON"] }
+```
+
+### 3. Elegir la billetera destino
+
+```bash
+curl "https://consola.mouvlatam.com/api/swaps/wallets" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+Toma el `id` de una billetera con `status: "DISPONIBLE"` cuya `network` coincida con la red que vas a usar.
+
+### 4. Cotizar
+
+```bash
+curl -X POST "https://consola.mouvlatam.com/api/swaps/quotes" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "side": "BUY",
+    "amountMode": "BUY_AMOUNT",
+    "amount": "1000",
+    "network": "TRON",
+    "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b"
+  }'
+```
+
+La respuesta trae `quote.id`, la tasa final (`rate`), los montos definitivos y `expiresAt`. **Acepta antes de `expiresAt`**: si venció, vuelve a cotizar. Hay un límite de **30 cotizaciones por minuto por empresa**.
+
+### 5. Aceptar con `Idempotency-Key`
+
+```bash
+curl -X POST "https://consola.mouvlatam.com/api/swaps" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Idempotency-Key: 7d2f9b0e-4a1c-4e8b-9d63-1b5c8a2e7f40" \
+  -H "Content-Type: application/json" \
+  -d '{ "quoteId": "c1f4a8e2-3b7d-4c59-8a60-2f9e1d7b5a43" }'
+```
+
+Con API key el header `Idempotency-Key` es **obligatorio** (8 a 128 caracteres: letras, números y `_ - : .`). La operación nace en `PROCESANDO` y tus pesos quedan comprometidos.
+
+<Warning>
+Esta llamada puede tardar **hasta ~8 segundos**. Configura un timeout de cliente de **al menos 30 segundos**. Si hay timeout, **reintenta con la MISMA `Idempotency-Key`**: devuelve la misma operación (`replay: true`) y nunca crea una segunda. **Nunca uses una key nueva para el mismo intento.**
+</Warning>
+
+### 6. Consultar el estado hasta `COMPLETADO`
+
+```bash
+curl "https://consola.mouvlatam.com/api/swaps/e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+Consulta cada **10 a 15 segundos**. `PROCESANDO` puede durar **varios minutos** mientras se entregan los USDT; es normal y no debes repetir la operación. Al llegar a `COMPLETADO`, el campo `txHash` trae el hash de la transacción on-chain.
+
+```bash
+# Ejemplo de polling
+until [ "$(curl -s "https://consola.mouvlatam.com/api/swaps/$SWAP_ID" \
+  -H "Authorization: Bearer $MOUV_KEY" | jq -r .swap.status)" != "PROCESANDO" ]; do
+  sleep 12
+done
+```
+
+### 7. Descargar el comprobante
+
+```bash
+curl -o comprobante.pdf \
+  "https://consola.mouvlatam.com/api/swaps/e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38/receipt.pdf" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+Disponible solo cuando la operación está `COMPLETADO`.
+
+## Estados de una operación
+
+| Estado | Significado | ¿Final? |
+|---|---|---|
+| `PROCESANDO` | Aceptada. Tus pesos quedan comprometidos y los USDT están en camino. | No |
+| `COMPLETADO` | Los USDT fueron entregados. Incluye `txHash` y hay comprobante PDF. | Sí |
+| `CANCELADO` | No se ejecutó; los pesos se devuelven. Revisa `failureCode` y `failureMessage`. | Sí |
+| `EN_REVISION` | Mouv está revisando la operación. Pasará a `COMPLETADO` o `CANCELADO`. No repitas la operación: consulta `GET /swaps/:id` y contacta a soporte con el `id`. | No |
+
+<Note>
+Mouv aún no envía notificaciones automáticas de swaps: consulta el estado por polling.
+</Note>
+
+## Errores comunes
+
+| HTTP | `error` | Qué hacer |
+|---|---|---|
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | Envía el header `Idempotency-Key` con un formato válido (8 a 128 caracteres) |
+| 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio. Solicita la habilitación |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` (una llave `WRITE` o `READ` no sirve en `/swaps`) |
+| 403 | `IP_NOT_ALLOWED` | La llave tiene IPs permitidas y la petición viene de otra. Revisa tu lista de IPs |
+| 403 | `WALLETS_REQUIRE_DASHBOARD` | Registrar o eliminar billeteras solo se hace desde el dashboard |
+| 410 | `QUOTE_EXPIRED` | La cotización venció. Cotiza de nuevo y usa una `Idempotency-Key` nueva |
+| 409 | `QUOTE_ALREADY_USED` | La cotización ya fue aceptada. El body trae `swapId`: consúltala con `GET /swaps/:id` |
+| 422 | `AMOUNT_BELOW_MINIMUM` | Monto menor al mínimo de tu empresa (ver `minUsdt`). En `TRON` el mínimo es mayor por el costo de la red: para montos pequeños usa `POLYGON` o aumenta el monto |
+| 422 | `LIMIT_EXCEEDED` | Superaste el límite por operación, diario o mensual (ver `scope`) |
+| 422 | `WALLET_NOT_WHITELISTED` | Falta `walletId`, no es de tu empresa, es de otra red o aún no está `DISPONIBLE` |
+| 422 | `INSUFFICIENT_FUNDS` | Saldo COP insuficiente |
+| 429 | `RATE_LIMITED` | Más de 30 cotizaciones por minuto. Espera según `Retry-After` |
+| 503 | `RATE_UNAVAILABLE`, `RATE_STALE`, `RATE_JUMP_BREAKER`, `RATE_DEVIATION` | No hay tasa disponible por ahora. Reintenta con backoff |
+
+La lista completa está en [Códigos de error](/errors).
+
+## Buenas prácticas
+
+<CardGroup cols={2}>
+  <Card title="Llave SWAP dedicada">
+    Crea una API key exclusiva para este servicio. El scope `SWAP` solo funciona en `/swaps/*` y no hereda permisos de `WRITE`, así que una filtración queda acotada.
+  </Card>
+  <Card title="Restringe por IP (allowedIps)">
+    Al crear la llave, define `allowedIps` con las IPs de salida de tus servidores. Es opcional, pero **recomendado** para llaves `SWAP`: una llave usada desde otra IP recibe `403 IP_NOT_ALLOWED`.
+  </Card>
+  <Card title="Una key por intento">
+    Genera un UUID nuevo por cada intención de compra y reutilízalo **solo** para reintentar ese mismo intento. Si tienes dudas, consulta `GET /swaps` antes de aceptar de nuevo.
+  </Card>
+  <Card title="Timeout de 30 s o más">
+    `POST /swaps` puede tardar ~8 s. Con un timeout corto podrías reintentar innecesariamente; si ocurre, reintenta con la misma `Idempotency-Key`.
+  </Card>
+  <Card title="Usa expiresAt">
+    Acepta apenas recibas la cotización y siempre compara con `expiresAt` en lugar de asumir una duración.
+  </Card>
+  <Card title="Rota las llaves">
+    Genera una nueva, cambia tu servicio y revoca la anterior. Ver [Autenticación](/authentication).
+  </Card>
+</CardGroup>
+
+## Referencia de endpoints
+
+<CardGroup cols={2}>
+  <Card title="GET /swaps/me" href="/api-reference/swaps/me" />
+  <Card title="GET /swaps/networks" href="/api-reference/swaps/networks" />
+  <Card title="GET /swaps/wallets" href="/api-reference/swaps/list-wallets" />
+  <Card title="POST /swaps/quotes" href="/api-reference/swaps/create-quote" />
+  <Card title="POST /swaps" href="/api-reference/swaps/accept" />
+  <Card title="GET /swaps" href="/api-reference/swaps/list" />
+  <Card title="GET /swaps/:id" href="/api-reference/swaps/get" />
+  <Card title="GET /swaps/:id/receipt.pdf" href="/api-reference/swaps/receipt" />
+</CardGroup>

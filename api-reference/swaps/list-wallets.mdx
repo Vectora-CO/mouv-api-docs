@@ -1,0 +1,67 @@
+---
+title: GET /swaps/wallets
+description: Billeteras registradas de tu empresa (solo lectura)
+api: 'GET https://consola.mouvlatam.com/api/swaps/wallets'
+---
+
+Lista las billeteras vigentes de tu empresa donde puedes recibir USDT.
+
+**Scope requerido**: `SWAP`.
+
+<Warning>
+Las billeteras se registran y eliminan **solo desde el dashboard**, con rol `ADMIN` y código 2FA. Por API solo se pueden listar: cualquier intento de alta o baja con API key responde `403 WALLETS_REQUIRE_DASHBOARD`. Es una medida de seguridad: una llave filtrada no puede desviar fondos a una billetera nueva.
+</Warning>
+
+## Response 200
+
+```json
+{
+  "wallets": [
+    {
+      "id": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+      "network": "TRON",
+      "address": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+      "label": "Tesorería",
+      "status": "DISPONIBLE",
+      "availableFrom": "2026-10-08T15:00:00.000Z",
+      "createdAt": "2026-10-08T15:00:00.000Z"
+    }
+  ]
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `id` | string | Úsalo como `walletId` al cotizar |
+| `network` | string | `TRON` o `POLYGON` |
+| `address` | string | Dirección de la billetera |
+| `label` | string \| null | Nombre que le diste en el dashboard |
+| `status` | string | `EN_REVISION`, `EN_ESPERA` o `DISPONIBLE` |
+| `availableFrom` | string | Fecha ISO 8601 desde la que la billetera puede operar, si además está aprobada |
+| `createdAt` | string | Fecha de registro (ISO 8601) |
+
+| `status` | Significado |
+|---|---|
+| `EN_REVISION` | Pendiente de aprobación. Todavía no opera |
+| `EN_ESPERA` | Aprobada, en período de espera hasta `availableFrom` (solo si tu empresa tiene configurado un período de espera; por defecto no hay) |
+| `DISPONIBLE` | Lista para operar: es la única que acepta cotizaciones |
+
+La billetera es usable apenas queda aprobada; no hay espera adicional por defecto.
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no permitida para la llave |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps/wallets" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

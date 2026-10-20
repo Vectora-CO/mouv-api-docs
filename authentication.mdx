@@ -20,7 +20,9 @@ Las llaves comienzan con el prefijo **`mvk_`** seguido de ~96 bits de entropía 
 3. Click **Generar nueva llave**
 4. Ingresá un **label** descriptivo (ej. `production-server`, `staging`, `reporting-readonly`)
 5. Elegí el **scope**: `READ` (solo lectura) o `WRITE` (lectura + operaciones financieras)
-6. La llave plana se muestra **una sola vez**. Copiala y guardala en tu secret manager — Mouv solo almacena un hash bcrypt, no podemos recuperarla
+   - `SWAP` (solo la [Conversión COP→USDT](/guides/swap-cop-usdt)) está disponible únicamente si Mouv habilitó el servicio para tu empresa; si no, la creación responde `403 SWAPS_NOT_ENABLED`.
+6. Opcional: define **`allowedIps`** (`string[]`), la lista de IPs desde las que se puede usar la llave. Si la defines, una petición desde otra IP recibe `403 IP_NOT_ALLOWED`. Es **recomendado para llaves `SWAP`**: usa las IPs de salida de tus servidores. Si no la defines, la llave funciona desde cualquier IP. Acepta IPs sueltas o rangos CIDR (hasta `/24` en IPv4 y `/48` en IPv6), máximo 20 entradas; una lista inválida responde `400 INVALID_ALLOWED_IPS`.
+7. La llave plana se muestra **una sola vez**. Copiala y guardala en tu secret manager — Mouv solo almacena un hash bcrypt, no podemos recuperarla
 
 <Warning>
 **Si perdés una llave, generá una nueva**. Mouv NO puede mostrarte llaves existentes — solo el hash queda almacenado.

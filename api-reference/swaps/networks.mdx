@@ -1,0 +1,44 @@
+---
+title: GET /swaps/networks
+description: Redes habilitadas para tu empresa
+api: 'GET https://consola.mouvlatam.com/api/swaps/networks'
+---
+
+Lista las redes en las que tu empresa puede recibir USDT.
+
+**Scope requerido**: `SWAP`.
+
+## Response 200
+
+```json
+{ "networks": ["TRON", "POLYGON"] }
+```
+
+| Valor | Red |
+|---|---|
+| `TRON` | USDT por TRC20 |
+| `POLYGON` | USDT en Polygon |
+
+La lista viene vacía si tu empresa no tiene el servicio configurado. El valor de `network` se usa **en mayúsculas** al cotizar.
+
+<Tip>
+En `TRON` (TRC20) el monto mínimo por operación es mayor porque incluye el costo de la red. Para montos pequeños usa `POLYGON`.
+</Tip>
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no permitida para la llave |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps/networks" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

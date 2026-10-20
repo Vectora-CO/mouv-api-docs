@@ -12,6 +12,7 @@ Mouv aplica rate limiting por IP origen sobre el header `X-Forwarded-For` (vía 
 | Lectura | **100 req/min** | `GET /wallets/balance`, `GET /wallets/transactions*`, `GET /deposits` |
 | Quote (preview fee) | **30 req/min** | `POST /transfers/quote`, `POST /transfers/quote/ach` |
 | Resolve key | **30 req/min** | `POST /transfers/resolve-key` |
+| Cotizaciones de conversión | **30 req/min por empresa** | `POST /swaps/quotes` |
 | Operaciones financieras | **10 req/min** | `POST /transfers/send`, `POST /deposits/pse`, `POST /deposits/:id/share-email` |
 | Authentication (no API) | **5 req/min** | `POST /auth/*` (no aplica a API keys) |
 
@@ -30,6 +31,19 @@ Content-Type: application/json
 ```
 
 El header `Retry-After` indica los segundos exactos hasta que la ventana se libera. La respuesta `429` NO consume cuota adicional.
+
+### Cotizaciones de conversión (`POST /swaps/quotes`)
+
+A diferencia de los demás, este límite se cuenta **por empresa** (no por IP): todas las llaves y sesiones de tu empresa comparten los 30 por minuto. Al excederlo responde `429`:
+
+```json
+{
+  "error": "RATE_LIMITED",
+  "message": "Demasiadas cotizaciones. Intenta de nuevo en un minuto."
+}
+```
+
+Espera según el header `Retry-After` antes de volver a cotizar. Una cotización tiene vencimiento corto (`expiresAt`), así que cotiza solo cuando vayas a aceptar.
 
 ## Estrategia recomendada
 

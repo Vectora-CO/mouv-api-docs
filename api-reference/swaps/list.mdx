@@ -1,0 +1,88 @@
+---
+title: GET /swaps
+description: Listado paginado de tus operaciones de conversión
+api: 'GET https://consola.mouvlatam.com/api/swaps'
+---
+
+Lista las operaciones de tu empresa, de la más reciente a la más antigua.
+
+**Scope requerido**: `SWAP`.
+
+## Query params
+
+<ParamField query="status" type="string">
+  Filtra por estado: `PROCESANDO`, `COMPLETADO`, `CANCELADO` o `EN_REVISION`. Otro valor responde `400 INVALID_REQUEST`.
+</ParamField>
+
+<ParamField query="side" type="string">
+  `BUY` (la única operación disponible). Un valor desconocido responde `400 INVALID_REQUEST`.
+</ParamField>
+
+<ParamField query="from" type="string">
+  Inicio del rango de `createdAt` (ISO 8601, inclusive).
+</ParamField>
+
+<ParamField query="to" type="string">
+  Fin del rango de `createdAt` (ISO 8601, inclusive).
+</ParamField>
+
+<ParamField query="page" type="integer">
+  Página, desde 1. Por defecto 1.
+</ParamField>
+
+<ParamField query="limit" type="integer">
+  Resultados por página, de 1 a 100. Por defecto 20.
+</ParamField>
+
+## Response 200
+
+```json
+{
+  "data": [
+    {
+      "id": "e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38",
+      "status": "COMPLETADO",
+      "side": "BUY",
+      "network": "TRON",
+      "usdtAmount": "1000.000000",
+      "usdtAmountMicro": "1000000000",
+      "copAmount": "4012350.00",
+      "copAmountCents": "401235000",
+      "rate": "4012.35",
+      "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+      "destinationAddress": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+      "depositAddress": null,
+      "txHash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+      "clientTxHash": null,
+      "failureCode": null,
+      "failureMessage": null,
+      "createdAt": "2026-10-08T15:00:00.000Z",
+      "acceptedAt": "2026-10-08T15:00:12.000Z",
+      "settledAt": "2026-10-08T15:06:40.000Z",
+      "cancelledAt": null
+    }
+  ],
+  "pagination": { "page": 1, "limit": 20, "total": 1 }
+}
+```
+
+Cada elemento de `data` es el mismo objeto `swap` de [`GET /swaps/:id`](/api-reference/swaps/get).
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | `status`, `side`, `from` o `to` inválidos. Corrige el parámetro |
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `IP_NOT_ALLOWED` | La petición viene de una IP no permitida para la llave |
+| 503 | `SWAP_UNAVAILABLE` | Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps?status=COMPLETADO&limit=20&page=1" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

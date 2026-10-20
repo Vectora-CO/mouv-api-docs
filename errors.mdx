@@ -152,3 +152,60 @@ Si la primera request 5xx-falló y reintentas con el mismo `reference`, Mouv res
 | 409 | `KEY_TYPE_NOT_AVAILABLE` | Ese tipo de llave no está disponible por ahora |
 | 404 | `KEY_NOT_FOUND` | La llave no existe o no pertenece a tu empresa |
 | 429 | `RATE_LIMIT_EXCEEDED` | Límite de creación de llaves por minuto — esperá y reintentá (el mismo `externalId` es idempotente) |
+
+## Conversión COP→USDT
+
+Los errores de `/swaps` tienen un shape plano (sin objeto `details`):
+
+```json
+{
+  "error": "AMOUNT_BELOW_MINIMUM",
+  "message": "El monto está por debajo del mínimo permitido.",
+  "minUsdt": "1000.000000"
+}
+```
+
+Pueden traer campos extra, siempre como `string`: `minUsdt`, `maxUsdt`, `retryAfterSeconds`, `scope` (`PER_OPERATION`, `DAILY` o `MONTHLY`) y `swapId`. Usa `error` para la lógica (es estable); `message` es para mostrar. Guía: [Conversión COP→USDT](/guides/swap-cop-usdt).
+
+| HTTP | Código | Significado y acción |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | Body o parámetro inválido (por ejemplo `network` en minúsculas). Corrige la solicitud |
+| 400 | `INVALID_AMOUNT` | `amount` no es un string decimal válido o es ≤ 0 |
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | Falta `Idempotency-Key` o su formato es inválido (8 a 128 caracteres: letras, números y `_ - : .`) |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` (una llave `WRITE` o `READ` no sirve en `/swaps`) |
+| 403 | `SCOPE_ROUTE_FORBIDDEN` | Una llave `SWAP` solo funciona en `/swaps/*` |
+| 403 | `IP_NOT_ALLOWED` | La llave tiene `allowedIps` y la petición viene de otra IP |
+| 400 | `INVALID_ALLOWED_IPS` | Al crear la llave, `allowedIps` tiene una IP o rango inválido (máximo 20 entradas; CIDR hasta `/24` IPv4 o `/48` IPv6) |
+| 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio habilitado. Solicita la habilitación |
+| 403 | `SWAPS_NOT_ENABLED` | Al crear una llave `SWAP`: el servicio no está habilitado para tu empresa |
+| 403 | `SWAP_NOT_CONFIGURED` | El servicio de tu empresa aún no está configurado. Contacta a soporte |
+| 403 | `COMPANY_NOT_ACTIVE` | Tu empresa no está activa para operar |
+| 403 | `BLACKLISTED` | No es posible procesar la operación. Contacta a soporte |
+| 403 | `MULTISIG_NOT_SUPPORTED` | El servicio aún no está disponible para empresas con aprobación multifirma |
+| 403 | `WALLETS_REQUIRE_DASHBOARD` | Registrar o eliminar billeteras solo se hace desde el dashboard, con 2FA |
+| 404 | `QUOTE_NOT_FOUND` | La cotización no existe o es de otra empresa |
+| 404 | `SWAP_NOT_FOUND` | La operación no existe o es de otra empresa |
+| 409 | `QUOTE_ALREADY_USED` | La cotización ya fue aceptada. El body trae `swapId`: consúltalo con `GET /swaps/:id` |
+| 409 | `STRUCTURING` | Tienes operaciones recientes. Espera `retryAfterSeconds` |
+| 409 | `RECEIPT_NOT_AVAILABLE` | El comprobante existe solo para operaciones `COMPLETADO` |
+| 409 | `INVALID_TRANSITION`, `CONCURRENT_UPDATE` | La operación cambió o no admite la acción. Consulta su estado y reintenta |
+| 410 | `QUOTE_EXPIRED` | La cotización venció. Cotiza de nuevo |
+| 422 | `IDEMPOTENCY_KEY_REUSED` | La `Idempotency-Key` ya se usó con otra cotización. El body trae `swapId` |
+| 422 | `NETWORK_NOT_ALLOWED` | La red no está habilitada para tu empresa |
+| 422 | `AMOUNT_BELOW_MINIMUM` | Monto menor al mínimo (ver `minUsdt`). En `TRON` el mínimo es mayor por el costo de la red: para montos pequeños usa `POLYGON` o aumenta el monto |
+| 422 | `LIMIT_EXCEEDED` | Supera el límite por operación (`scope: PER_OPERATION`, con `maxUsdt`), diario (`DAILY`) o mensual (`MONTHLY`) |
+| 422 | `WALLET_NOT_WHITELISTED` | Falta `walletId`, no es de tu empresa, es de otra red o aún no está `DISPONIBLE` |
+| 422 | `SWAP_NOT_SUPPORTED` | La operación solicitada no está disponible (solo se puede comprar: `side: "BUY"`) |
+| 422 | `INSUFFICIENT_FUNDS` | Saldo COP insuficiente |
+| 422 | `ACCOUNT_NOT_ELIGIBLE` | Tu cuenta no está habilitada para conversiones. Contacta a soporte |
+| 429 | `RATE_LIMITED` | Más de 30 cotizaciones por minuto por empresa. Espera según `Retry-After` |
+| 503 | `RATE_UNAVAILABLE`, `RATE_STALE`, `RATE_JUMP_BREAKER`, `RATE_DEVIATION` | No hay tasa disponible por ahora. Reintenta con backoff |
+| 503 | `SWAP_CAPACITY_UNAVAILABLE` | Sin cupo en este momento. Reintenta más tarde o con un monto menor |
+| 503 | `SWAP_TEMPORARILY_UNAVAILABLE`, `SWAPS_DISABLED` | Servicio no disponible temporalmente. Reintenta con backoff; si persiste, contacta a soporte |
+| 503 | `GATE_CHECK_FAILED`, `QUOTE_INTEGRITY`, `SWAP_UNAVAILABLE` | No se pudo validar o confirmar. Reintenta con una cotización nueva; si persiste, contacta a soporte con el `error` |
+
+Trata cualquier código no listado según su status HTTP (`4xx`: corrige o contacta a soporte; `503`: reintenta con backoff) y muestra el `message`.
+
+<Warning>
+**Reintentos de `POST /swaps`**: ante un timeout o un `5xx`, reintenta con la **misma** `Idempotency-Key`. Nunca generes una key nueva para el mismo intento.
+</Warning>

@@ -1,0 +1,109 @@
+---
+title: POST /swaps
+description: Aceptar una cotización y crear la operación
+api: 'POST https://consola.mouvlatam.com/api/swaps'
+---
+
+Acepta una cotización vigente y crea la operación. Tus pesos quedan comprometidos y la operación nace en `PROCESANDO`.
+
+**Scope requerido**: `SWAP` · **Idempotente por `Idempotency-Key`** (obligatorio con API key).
+
+<Warning>
+Esta llamada puede tardar **hasta ~8 segundos**. Usa un timeout de cliente de **30 segundos o más**. Si hay timeout, **reintenta con la MISMA `Idempotency-Key`**: devuelve la misma operación y no se crea otra. **Nunca generes una key nueva para el mismo intento**: podrías duplicar la compra. Si dudas, consulta [`GET /swaps`](/api-reference/swaps/list) antes de aceptar de nuevo.
+</Warning>
+
+## Headers
+
+<ParamField header="Idempotency-Key" type="string" required>
+  De 8 a 128 caracteres: letras, números y `_ - : .` (por ejemplo un UUID). Un valor ausente o con formato inválido responde `400 IDEMPOTENCY_KEY_REQUIRED`. Genera uno nuevo por cada intención de compra y reutilízalo **solo** para reintentar esa misma aceptación.
+</ParamField>
+
+## Body
+
+<ParamField body="quoteId" type="string" required>
+  `quote.id` devuelto por [`POST /swaps/quotes`](/api-reference/swaps/create-quote). Debe estar vigente (`expiresAt`).
+</ParamField>
+
+Con API key no se solicita código 2FA.
+
+## Response 201 (operación nueva) · 200 (reintento idempotente)
+
+```json
+{
+  "swap": {
+    "id": "e3a1b7c9-5d24-4f8a-b0c6-9a7e2d1f4b38",
+    "status": "PROCESANDO",
+    "side": "BUY",
+    "network": "TRON",
+    "usdtAmount": "1000.000000",
+    "usdtAmountMicro": "1000000000",
+    "copAmount": "4012350.00",
+    "copAmountCents": "401235000",
+    "rate": "4012.35",
+    "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+    "destinationAddress": "TJRabPrwbZy45sbavfcjinPJC18kjpRTv8",
+    "depositAddress": null,
+    "txHash": null,
+    "clientTxHash": null,
+    "failureCode": null,
+    "failureMessage": null,
+    "createdAt": "2026-10-08T15:00:00.000Z",
+    "acceptedAt": "2026-10-08T15:00:12.000Z",
+    "settledAt": null,
+    "cancelledAt": null
+  },
+  "replay": false
+}
+```
+
+En un reintento con la misma `Idempotency-Key` y la misma cotización la respuesta es `200` con la **misma** operación y `"replay": true`. Los campos `depositAddress` y `clientTxHash` no aplican a la compra y siempre vienen `null`. Descripción de los campos en [`GET /swaps/:id`](/api-reference/swaps/get).
+
+## Idempotencia
+
+| Situación | Respuesta |
+|---|---|
+| Misma `Idempotency-Key` y mismo `quoteId` ya aceptados | `200` con la misma operación y `"replay": true` |
+| Misma `Idempotency-Key` con **otro** `quoteId` | `422 IDEMPOTENCY_KEY_REUSED` (el body incluye `swapId` de la operación original) |
+| `quoteId` ya usado con otra `Idempotency-Key` | `409 QUOTE_ALREADY_USED` (el body incluye `swapId`: consúltalo con `GET /swaps/:id`) |
+| Intento anterior rechazado al aceptar | Repetir la misma `Idempotency-Key` devuelve el mismo error |
+| Cotización vencida | `410 QUOTE_EXPIRED`: cotiza de nuevo y usa una `Idempotency-Key` nueva |
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 400 | `IDEMPOTENCY_KEY_REQUIRED` | Falta el header `Idempotency-Key` o su formato es inválido |
+| 400 | `INVALID_REQUEST` | `quoteId` ausente o mal formado |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio habilitado |
+| 403 | `COMPANY_NOT_ACTIVE` | Tu empresa no está activa para operar |
+| 403 | `BLACKLISTED` | No es posible procesar la operación. Contacta a soporte |
+| 403 | `MULTISIG_NOT_SUPPORTED` | El servicio aún no está disponible para empresas con aprobación multifirma |
+| 404 | `QUOTE_NOT_FOUND` | La cotización no existe o es de otra empresa |
+| 409 | `QUOTE_ALREADY_USED` | La cotización ya fue aceptada. Usa el `swapId` del body |
+| 409 | `STRUCTURING` | Tienes operaciones recientes. Espera `retryAfterSeconds` |
+| 410 | `QUOTE_EXPIRED` | Cotiza de nuevo |
+| 422 | `IDEMPOTENCY_KEY_REUSED` | La key ya se usó con otra cotización. Usa el `swapId` del body o genera una nueva key para una nueva intención |
+| 422 | `INSUFFICIENT_FUNDS` | Saldo COP insuficiente |
+| 422 | `AMOUNT_BELOW_MINIMUM`, `LIMIT_EXCEEDED` | Monto fuera de los límites de tu empresa (ver `minUsdt`, `maxUsdt`, `scope`). Se revalidan al aceptar |
+| 422 | `WALLET_NOT_WHITELISTED` | La billetera ya no está disponible |
+| 422 | `ACCOUNT_NOT_ELIGIBLE` | Tu cuenta no está habilitada para conversiones. Contacta a soporte |
+| 503 | `SWAP_CAPACITY_UNAVAILABLE` | Sin cupo en este momento. Reintenta más tarde |
+| 503 | `SWAP_TEMPORARILY_UNAVAILABLE`, `SWAP_UNAVAILABLE`, `GATE_CHECK_FAILED`, `QUOTE_INTEGRITY` | No se pudo validar o confirmar. Reintenta con una cotización nueva; si persiste, contacta a soporte con el `error` |
+
+<Note>
+Una operación rechazada al aceptar (por ejemplo por un límite o saldo insuficiente) puede dejar un registro `CANCELADO` en el listado, sin movimiento de fondos, además de la respuesta de error.
+</Note>
+
+<RequestExample>
+
+```bash curl
+curl -X POST "https://consola.mouvlatam.com/api/swaps" \
+  --max-time 30 \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Idempotency-Key: 7d2f9b0e-4a1c-4e8b-9d63-1b5c8a2e7f40" \
+  -H "Content-Type: application/json" \
+  -d '{ "quoteId": "c1f4a8e2-3b7d-4c59-8a60-2f9e1d7b5a43" }'
+```
+
+</RequestExample>

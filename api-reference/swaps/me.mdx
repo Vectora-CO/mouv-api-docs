@@ -1,0 +1,64 @@
+---
+title: GET /swaps/me
+description: Estado del servicio de conversión para tu empresa y tus límites
+api: 'GET https://consola.mouvlatam.com/api/swaps/me'
+---
+
+Indica si tu empresa puede usar la Conversión COP→USDT, qué redes tiene habilitadas y cuáles son sus montos mínimos y máximos.
+
+**Scope requerido**: `SWAP`. Si tu empresa no tiene el servicio habilitado, responde `enabled: false` con `networks` vacío.
+
+## Response 200
+
+```json
+{
+  "enabled": true,
+  "networks": ["TRON", "POLYGON"],
+  "sides": ["BUY"],
+  "walletCooldownHours": 0,
+  "walletHolder": { "fixed": true, "name": "Mi Empresa S.A.S." },
+  "minUsdt": "1000.000000",
+  "maxUsdt": "50000.000000",
+  "dailyLimitCop": "500000000.00",
+  "monthlyLimitCop": "2000000000.00",
+  "canManageWallets": false,
+  "canOperate": true
+}
+```
+
+| Campo | Tipo | Descripción |
+|---|---|---|
+| `enabled` | boolean | `true` si tu empresa tiene el servicio activo y al menos una red habilitada |
+| `networks` | string[] | Redes habilitadas para tu empresa (`TRON`, `POLYGON`) |
+| `sides` | string[] | Operaciones disponibles. Hoy: `["BUY"]` (solo compra) |
+| `walletCooldownHours` | number | Horas de espera de una billetera nueva antes de poder operar. Por defecto `0` |
+| `walletHolder` | object | `fixed: true` indica que las billeteras deben estar a nombre de tu empresa; `name` es la razón social registrada |
+| `minUsdt` | string | Monto mínimo por operación, en USDT (decimal, hasta 6 decimales). Depende de la configuración de tu empresa |
+| `maxUsdt` | string | Monto máximo por operación, en USDT. Depende de la configuración de tu empresa |
+| `dailyLimitCop` | string | Tope diario de compras de tu empresa, en pesos (decimal con 2 decimales; día calendario de Colombia) |
+| `monthlyLimitCop` | string | Tope mensual de compras de tu empresa, en pesos (decimal con 2 decimales) |
+| `canManageWallets` | boolean | Con API key siempre `false`: las billeteras se administran solo desde el dashboard |
+| `canOperate` | boolean | `true` si la credencial puede cotizar y aceptar |
+
+<Note>
+Los montos mínimos, máximos y los límites diario y mensual **no son fijos**: se configuran por empresa. Consúltalos siempre aquí en lugar de dejarlos escritos en tu código. Si un límite no está configurado llega como `null`. Pueden aparecer campos informativos adicionales; ignóralos.
+</Note>
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 401 | `INVALID_API_KEY` | Llave inválida o revocada. Verifica el header `Authorization` |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP`. Crea una llave `SWAP` |
+| 403 | `SCOPE_ROUTE_FORBIDDEN` | Intentaste usar una llave `SWAP` fuera de `/swaps` |
+| 403 | `IP_NOT_ALLOWED` | La llave tiene IPs permitidas y la petición viene de otra |
+| 503 | `SWAP_UNAVAILABLE` | Servicio temporalmente no disponible. Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl "https://consola.mouvlatam.com/api/swaps/me" \
+  -H "Authorization: Bearer mvk_..."
+```
+
+</RequestExample>

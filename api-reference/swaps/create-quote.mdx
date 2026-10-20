@@ -1,0 +1,110 @@
+---
+title: POST /swaps/quotes
+description: Crear una cotización firme COP→USDT
+api: 'POST https://consola.mouvlatam.com/api/swaps/quotes'
+---
+
+Crea una cotización firme para comprar USDT con pesos. La tasa final y los montos definitivos vienen en la respuesta; no hay cálculos adicionales de tu lado.
+
+**Scope requerido**: `SWAP` · **Rate limit**: 30 cotizaciones por minuto por empresa.
+
+**Precio**: referencia de mercado del dólar en Colombia + el margen pactado con tu empresa. Fuera del horario de mercado (después de las 13:00 hora de Colombia, fines de semana y festivos) se usa el último cierre + el margen fuera de horario pactado.
+
+**Vigencia**: la cotización vence en `expiresAt`. Úsalo siempre en lugar de asumir una duración. Cada cotización se acepta una sola vez.
+
+## Body
+
+<ParamField body="side" type="string" required>
+  `BUY` (compra de USDT pagando COP). Es la única operación disponible: otro valor responde `422 SWAP_NOT_SUPPORTED`.
+</ParamField>
+
+<ParamField body="amountMode" type="string" required>
+  Unidad en la que envías `amount`:
+  - `BUY_AMOUNT`: `amount` está en **USDT** (los USDT que quieres recibir).
+  - `SELL_AMOUNT`: `amount` está en **COP** (los pesos que quieres gastar; se calculan los USDT).
+</ParamField>
+
+<ParamField body="amount" type="string" required>
+  Monto decimal positivo, como **string** (nunca número): USDT con hasta 6 decimales (`"1500.25"`) o COP con hasta 2 decimales (`"4012350.00"`). Sin separador de miles, sin signo ni notación exponencial. Hasta 16 dígitos enteros.
+</ParamField>
+
+<ParamField body="network" type="string" required>
+  Red en **MAYÚSCULAS**: `TRON` o `POLYGON`. Consulta las habilitadas con [`GET /swaps/networks`](/api-reference/swaps/networks).
+</ParamField>
+
+<ParamField body="walletId" type="string" required>
+  `id` de una billetera `DISPONIBLE` de tu empresa, de la misma red. Ver [`GET /swaps/wallets`](/api-reference/swaps/list-wallets). Se acepta también el alias `destinationWalletId`.
+</ParamField>
+
+<Note>
+En la modalidad actual los USDT se calculan al centavo (múltiplos de `0.01`). El valor definitivo es siempre el `usdtAmount` de la cotización. Cuando indicas pesos, el COP debitado nunca supera lo indicado.
+</Note>
+
+## Response 201
+
+```json
+{
+  "quote": {
+    "id": "c1f4a8e2-3b7d-4c59-8a60-2f9e1d7b5a43",
+    "side": "BUY",
+    "amountMode": "BUY_AMOUNT",
+    "network": "TRON",
+    "usdtAmount": "1000.000000",
+    "usdtAmountMicro": "1000000000",
+    "copAmount": "4012350.00",
+    "copAmountCents": "401235000",
+    "rate": "4012.35",
+    "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b",
+    "expiresAt": "2026-10-08T15:00:20.000Z",
+    "createdAt": "2026-10-08T15:00:00.000Z"
+  }
+}
+```
+
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador de la cotización: es el `quoteId` al aceptar |
+| `usdtAmount` / `usdtAmountMicro` | USDT definitivos (decimal con 6 decimales / entero en millonésimas: 1 USDT = `"1000000"`) |
+| `copAmount` / `copAmountCents` | COP exactos que se debitan (decimal con 2 decimales / entero en centavos) |
+| `rate` | Pesos por 1 USDT: la tasa final de la operación |
+| `walletId` | Billetera destino |
+| `expiresAt` | Vencimiento de la cotización (ISO 8601, UTC) |
+
+## Errores
+
+| HTTP | `error` | Cuándo y qué hacer |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | Body inválido: `side`, `amountMode`, `network` o `walletId` ausentes o mal formados (por ejemplo `network` en minúsculas). Corrige la solicitud |
+| 400 | `INVALID_AMOUNT` | `amount` no es un string decimal válido o es menor o igual a 0 |
+| 403 | `INSUFFICIENT_SCOPE` | La llave no es scope `SWAP` |
+| 403 | `SWAP_NOT_ENABLED` | Tu empresa no tiene el servicio habilitado. Solicita la habilitación |
+| 403 | `SWAP_NOT_CONFIGURED` | El servicio de tu empresa aún no está configurado. Contacta a soporte |
+| 403 | `COMPANY_NOT_ACTIVE` | Tu empresa no está activa para operar |
+| 403 | `BLACKLISTED` | No es posible procesar la operación. Contacta a soporte |
+| 409 | `STRUCTURING` | Tienes operaciones recientes. Espera `retryAfterSeconds` antes de reintentar |
+| 422 | `SWAP_NOT_SUPPORTED` | `side` distinto de `BUY` |
+| 422 | `NETWORK_NOT_ALLOWED` | La red no está habilitada para tu empresa |
+| 422 | `AMOUNT_BELOW_MINIMUM` | Monto menor al mínimo de tu empresa. El body incluye `minUsdt`. En `TRON` (TRC20) el mínimo es mayor porque incluye el costo de la red: para montos pequeños usa `POLYGON` o aumenta el monto |
+| 422 | `LIMIT_EXCEEDED` | Supera el límite por operación (`scope: PER_OPERATION`, con `maxUsdt`), diario (`DAILY`) o mensual (`MONTHLY`) |
+| 422 | `WALLET_NOT_WHITELISTED` | Falta `walletId`, no es de tu empresa, es de otra red o aún no está `DISPONIBLE` |
+| 429 | `RATE_LIMITED` | Más de 30 cotizaciones por minuto. Espera según `Retry-After` |
+| 503 | `RATE_UNAVAILABLE`, `RATE_STALE`, `RATE_JUMP_BREAKER`, `RATE_DEVIATION` | No hay tasa disponible por ahora. Reintenta con backoff |
+| 503 | `SWAP_CAPACITY_UNAVAILABLE` | Sin cupo para esta operación en este momento. Reintenta más tarde o con un monto menor |
+| 503 | `SWAP_TEMPORARILY_UNAVAILABLE`, `SWAP_UNAVAILABLE`, `SWAPS_DISABLED` | Servicio no disponible temporalmente. Reintenta con backoff |
+
+<RequestExample>
+
+```bash curl
+curl -X POST "https://consola.mouvlatam.com/api/swaps/quotes" \
+  -H "Authorization: Bearer mvk_..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "side": "BUY",
+    "amountMode": "BUY_AMOUNT",
+    "amount": "1000",
+    "network": "TRON",
+    "walletId": "5f0c2a64-7a5b-4d0e-9f3a-0c1d2e3f4a5b"
+  }'
+```
+
+</RequestExample>
